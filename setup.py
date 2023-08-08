@@ -5,10 +5,16 @@ setup(
     name='od',
     version='0.2.6',
     description='Fast and accurate single shot object detector',
-    author = 'NVIDIA Corporation',
+    author='NVIDIA Corporation',
     packages=[],
-    ext_modules=[CUDAExtension('_C',
-        ['csrc/extensions.cpp', 'csrc/engine.cpp', 'csrc/cuda/decode.cu', 'csrc/cuda/decode_rotate.cu', 'csrc/cuda/nms.cu', 'csrc/cuda/nms_iou.cu'],
+    ext_modules=[CUDAExtension('odtk', [
+            'csrc/extensions.cpp',
+            'csrc/engine.cpp',
+            'csrc/cuda/decode.cu',
+            'csrc/cuda/decode_rotate.cu',
+            'csrc/cuda/nms.cu',
+            'csrc/cuda/nms_iou.cu'
+    ],
         extra_compile_args={
             'cxx': ['-std=c++14', '-O2', '-Wall'],
             'nvcc': [
@@ -18,17 +24,10 @@ setup(
                 '-gencode=arch=compute_75,code=sm_75', '-gencode=arch=compute_80,code=sm_80',
                 '-gencode=arch=compute_86,code=sm_86', '-gencode=arch=compute_86,code=compute_86'
             ],
-        },
+    },
         libraries=['nvinfer', 'nvinfer_plugin', 'nvonnxparser', 'opencv_core', 'opencv_imgproc', 'opencv_highgui', 'opencv_imgcodecs'])
     ],
-    cmdclass={'build_ext': BuildExtension.with_options(no_python_abi_suffix=True)},
-    # install_requires=[
-    #     'torch>=1.0.0a0',
-    #     'torchvision',
-    #     'apex @ git+https://github.com/NVIDIA/apex',
-    #     'pycocotools @ git+https://github.com/nvidia/cocoapi.git#subdirectory=PythonAPI',
-    #     'pillow',
-    #     'requests',
-    # ],
-    # entry_points = {'console_scripts': ['odtk=odtk.main:main']}
+    cmdclass={
+        'build_ext': BuildExtension.with_options(no_python_abi_suffix=True)
+    },
 )
