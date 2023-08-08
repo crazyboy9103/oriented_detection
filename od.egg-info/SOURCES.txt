@@ -1,0 +1,12 @@
+README.md
+setup.py
+csrc/engine.cpp
+csrc/extensions.cpp
+csrc/cuda/decode.cu
+csrc/cuda/decode_rotate.cu
+csrc/cuda/nms.cu
+csrc/cuda/nms_iou.cu
+od.egg-info/PKG-INFO
+od.egg-info/SOURCES.txt
+od.egg-info/dependency_links.txt
+od.egg-info/top_level.txt
