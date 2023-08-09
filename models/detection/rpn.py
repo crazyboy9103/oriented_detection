@@ -1,17 +1,16 @@
 # Adapted from torchvision/models/detection/rpn.py
 from typing import Dict, List, Optional, Tuple
-import sys
-sys.path.append("../..")
 
 import torch
 from torch import nn, Tensor
 from torch.nn import functional as F
 from torchvision.ops import Conv2dNormActivation
 from torchvision.models.detection.image_list import ImageList
+from torchvision.models.detection.anchor_utils import AnchorGenerator
 
 from ops import boxes as box_ops
-import det_utils
-from .anchor_utils import AnchorGenerator
+from models.detection import det_utils
+
 
 class RPNHead(nn.Module):
     """
@@ -69,11 +68,13 @@ class RPNHead(nn.Module):
             error_msgs,
         )
 
-    def forward(self, x: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
+    def forward(self, features: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
         logits = []
         bbox_reg = []
-        for feature in x:
+        for feature in features:
             t = self.conv(feature)
+            # TODO In mmrotate, it adds one relu layer here (seems to be due to regularization effect?)
+            # t = F.relu(t, inplace=True)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg

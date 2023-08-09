@@ -4,9 +4,10 @@ import torch
 import torch.nn.functional as F
 import torchvision
 from torch import nn, Tensor
-from torchvision.ops import boxes as box_ops, roi_align
+from torchvision.ops import roi_align
 
-import det_utils
+from ops import boxes as box_ops
+from models.detection import det_utils
 
 class RoIHeads(nn.Module):
     __annotations__ = {
@@ -30,17 +31,10 @@ class RoIHeads(nn.Module):
         score_thresh,
         nms_thresh,
         detections_per_img,
-        # Mask
-        mask_roi_pool=None,
-        mask_head=None,
-        mask_predictor=None,
-        keypoint_roi_pool=None,
-        keypoint_head=None,
-        keypoint_predictor=None,
     ):
         super().__init__()
 
-        self.box_similarity = box_ops.box_iou
+        self.box_similarity = box_ops.box_iou_rotated
         # assign ground-truth boxes for each proposal
         self.proposal_matcher = det_utils.Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=False)
 
@@ -63,7 +57,6 @@ class RoIHeads(nn.Module):
         matched_idxs = []
         labels = []
         for proposals_in_image, gt_boxes_in_image, gt_labels_in_image in zip(proposals, gt_boxes, gt_labels):
-
             if gt_boxes_in_image.numel() == 0:
                 # Background image
                 device = proposals_in_image.device
@@ -72,8 +65,7 @@ class RoIHeads(nn.Module):
                 )
                 labels_in_image = torch.zeros((proposals_in_image.shape[0],), dtype=torch.int64, device=device)
             else:
-                #  set to self.box_similarity when https://github.com/pytorch/pytorch/issues/27495 lands
-                match_quality_matrix = box_ops.box_iou(gt_boxes_in_image, proposals_in_image)
+                match_quality_matrix = self.box_similarity(gt_boxes_in_image, proposals_in_image)
                 matched_idxs_in_image = self.proposal_matcher(match_quality_matrix)
 
                 clamped_matched_idxs_in_image = matched_idxs_in_image.clamp(min=0)
@@ -132,6 +124,7 @@ class RoIHeads(nn.Module):
         gt_boxes = [t["boxes"].to(dtype) for t in targets]
         gt_labels = [t["labels"] for t in targets]
 
+        # TODO : Is this justified ?
         # append ground-truth bboxes to propos
         proposals = self.add_gt_proposals(proposals, gt_boxes)
 
@@ -149,7 +142,7 @@ class RoIHeads(nn.Module):
 
             gt_boxes_in_image = gt_boxes[img_id]
             if gt_boxes_in_image.numel() == 0:
-                gt_boxes_in_image = torch.zeros((1, 4), dtype=dtype, device=device)
+                gt_boxes_in_image = torch.zeros((1, 5), dtype=dtype, device=device)
             matched_gt_boxes.append(gt_boxes_in_image[matched_idxs[img_id]])
 
         regression_targets = self.box_coder.encode(matched_gt_boxes, proposals)
