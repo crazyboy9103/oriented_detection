@@ -32,12 +32,14 @@
 #include <vector>
 #include <optional>
 
-#include "engine.h"
+// #include "engine.h"
 #include "cuda/decode.h"
 #include "cuda/decode_rotate.h"
 #include "cuda/nms.h"
 #include "cuda/nms_iou.h"
 #include <stdio.h>
+
+using std::vector;
 
 #define CHECK_CUDA(x) AT_ASSERTM(x.is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
@@ -157,44 +159,44 @@ vector<torch::Tensor> nms(torch::Tensor scores, torch::Tensor boxes, torch::Tens
     return {nms_scores, nms_boxes, nms_classes};
 }
 
-vector<torch::Tensor> infer(odtk::Engine &engine, torch::Tensor data, bool rotated=false) {
-    CHECK_INPUT(data);
+// vector<torch::Tensor> infer(odtk::Engine &engine, torch::Tensor data, bool rotated=false) {
+//     CHECK_INPUT(data);
 
-    int num_boxes = (!rotated) ? 4 : 6;
-    int batch = data.size(0);
-    auto input_size = engine.getInputSize();
-    data = torch::constant_pad_nd(data, {0, input_size[1] - data.size(3), 0, input_size[0] - data.size(2)});
+//     int num_boxes = (!rotated) ? 4 : 6;
+//     int batch = data.size(0);
+//     auto input_size = engine.getInputSize();
+//     data = torch::constant_pad_nd(data, {0, input_size[1] - data.size(3), 0, input_size[0] - data.size(2)});
 
-    int num_detections = engine.getMaxDetections();
-    auto scores = torch::zeros({batch, num_detections}, data.options());
-    auto boxes = torch::zeros({batch, num_detections, num_boxes}, data.options());
-    auto classes = torch::zeros({batch, num_detections}, data.options());
+//     int num_detections = engine.getMaxDetections();
+//     auto scores = torch::zeros({batch, num_detections}, data.options());
+//     auto boxes = torch::zeros({batch, num_detections, num_boxes}, data.options());
+//     auto classes = torch::zeros({batch, num_detections}, data.options());
 
-    vector<void *> buffers;
-    for (auto buffer : {data, scores, boxes, classes}) {
-        buffers.push_back(buffer.data_ptr<float>());
-    }
+//     vector<void *> buffers;
+//     for (auto buffer : {data, scores, boxes, classes}) {
+//         buffers.push_back(buffer.data_ptr<float>());
+//     }
 
-    engine.infer(buffers, batch);
+//     engine.infer(buffers, batch);
 
-    return {scores, boxes, classes};
-}
+//     return {scores, boxes, classes};
+// }
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    pybind11::class_<odtk::Engine>(m, "Engine")
-        .def(pybind11::init<const char *, size_t, const vector<int>&, string, float, int,
-            const vector<vector<float>>&, bool, float, int, const vector<string>&, string, string, bool>())
-        .def("save", &odtk::Engine::save)
-        .def("infer", &odtk::Engine::infer)
-        .def_property_readonly("stride", &odtk::Engine::getStride)
-        .def_property_readonly("input_size", &odtk::Engine::getInputSize)
-        .def_static("load", [](const string &path) {
-            return new odtk::Engine(path);
-        })
-        .def("__call__", [](odtk::Engine &engine, torch::Tensor data, bool rotated=false) {
-            return infer(engine, data, rotated);
-        });
+    // pybind11::class_<odtk::Engine>(m, "Engine")
+    //     .def(pybind11::init<const char *, size_t, const vector<int>&, string, float, int,
+    //         const vector<vector<float>>&, bool, float, int, const vector<string>&, string, string, bool>())
+    //     .def("save", &odtk::Engine::save)
+    //     .def("infer", &odtk::Engine::infer)
+    //     .def_property_readonly("stride", &odtk::Engine::getStride)
+    //     .def_property_readonly("input_size", &odtk::Engine::getInputSize)
+    //     .def_static("load", [](const string &path) {
+    //         return new odtk::Engine(path);
+    //     })
+    //     .def("__call__", [](odtk::Engine &engine, torch::Tensor data, bool rotated=false) {
+    //         return infer(engine, data, rotated);
+    //     });
     m.def("decode", &decode);
     m.def("nms", &nms);
     m.def("iou", &iou);
