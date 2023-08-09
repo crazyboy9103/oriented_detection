@@ -7,8 +7,8 @@ from torchvision.extension import _assert_has_ops
 from torchvision.utils import _log_api_usage_once
 from torchvision.ops._utils import _upcast
 
-from ._box_convert import * # TODO 
-
+from _box_convert import * # TODO 
+from odtk._C import iou as iou_rotated, nms as nms_rotated
 
 def nms(boxes: Tensor, scores: Tensor, iou_threshold: float) -> Tensor:
     """

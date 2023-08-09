@@ -8,9 +8,23 @@ from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
 
 from .rpn import AnchorGenerator
 
-class _RotatedFasterRCNN(GeneralizedRCNN):
+def _check_for_degenerate_boxes(targets):
+    for target_idx, target in enumerate(targets):
+        boxes = target["boxes"]
+        degenerate_boxes = boxes[:, 2:] <= boxes[:, :2]
+        if degenerate_boxes.any():
+            # print the first degenerate box
+            bb_idx = torch.where(degenerate_boxes.any(dim=1))[0][0]
+            degen_bb: List[float] = boxes[bb_idx].tolist()
+            torch._assert(
+                False,
+                "All bounding boxes should have positive height and width."
+                f" Found invalid box {degen_bb} for target at index {target_idx}.",
+            )
+            
+class RotatedFasterRCNN(GeneralizedRCNN):
     def __init__(self, backbone: nn.Module, rpn: nn.Module, roi_heads: nn.Module, transform: nn.Module) -> None:
-        super(_RotatedFasterRCNN, self).__init__(backbone, rpn, roi_heads, transform)
+        super(RotatedFasterRCNN, self).__init__(backbone, rpn, roi_heads, transform)
 
     def forward(self, images, targets=None):
         # type: (List[Tensor], Optional[List[Dict[str, Tensor]]]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
@@ -54,22 +68,12 @@ class _RotatedFasterRCNN(GeneralizedRCNN):
         # Check for degenerate boxes
         # TODO: Move this to a function
         if targets is not None:
-            for target_idx, target in enumerate(targets):
-                boxes = target["boxes"]
-                degenerate_boxes = boxes[:, 2:] <= boxes[:, :2]
-                if degenerate_boxes.any():
-                    # print the first degenerate box
-                    bb_idx = torch.where(degenerate_boxes.any(dim=1))[0][0]
-                    degen_bb: List[float] = boxes[bb_idx].tolist()
-                    torch._assert(
-                        False,
-                        "All bounding boxes should have positive height and width."
-                        f" Found invalid box {degen_bb} for target at index {target_idx}.",
-                    )
+            _check_for_degenerate_boxes(targets)
 
         features = self.backbone(images.tensors)
         if isinstance(features, torch.Tensor):
             features = OrderedDict([("0", features)])
+            
         proposals, proposal_losses = self.rpn(images, features, targets)
         detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
         detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)  # type: ignore[operator]

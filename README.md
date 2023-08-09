@@ -2,10 +2,29 @@
 export PATH=/usr/local/cuda-11.7/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-11.7/lib64:$LD_LIBRARY_PATH
 # Compile csrc
-python setup.py install 
-# or 
 pip install -e .
+
 ```python
-import torch # torch must be imported before odtk
-from odtk._C import decode, iou, nms 
+import torch # torch must be imported before detectron2
+from torch.ops.detectron2 import (
+    nms_rotated,
+    box_iou_rotated,
+    roi_align_rotated_forward,
+    roi_align_rotated_backward
+)
+from detectron2._C import (
+    get_compiler_version,
+    get_cuda_version,
+    has_cuda,
+    deform_conv_forward,
+    deform_conv_backward_input,
+    deform_conv_backward_filter,
+    modulated_deform_conv_forward,
+    modulated_deform_conv_backward,
+    COCOevalAccumulate,
+    COCOevalEvaluateImages,
+    InstanceAnnotation,
+    ImageEvaluation
+)
+
 ```

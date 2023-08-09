@@ -11,7 +11,7 @@ from torchvision.models.detection.image_list import ImageList
 
 from ops import boxes as box_ops
 import det_utils
-from anchor_utils import AnchorGenerator
+from .anchor_utils import AnchorGenerator
 
 class RPNHead(nn.Module):
     """
@@ -111,7 +111,7 @@ def concat_box_prediction_layers(box_cls: List[Tensor], box_regression: List[Ten
     return box_cls, box_regression
 
 
-class RegionProposalNetwork(torch.nn.Module):
+class RegionProposalNetwork(nn.Module):
     """
     Implements Region Proposal Network (RPN).
 

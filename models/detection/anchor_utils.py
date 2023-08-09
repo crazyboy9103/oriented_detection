@@ -6,7 +6,6 @@ from torch import nn, Tensor
 from torchvision.models.detection.image_list import ImageList
 
 
-
 class AnchorGenerator(nn.Module):
     """
     Module that generates anchors for a set of feature maps and
