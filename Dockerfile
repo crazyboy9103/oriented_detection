@@ -5,6 +5,7 @@ FROM nvidia/cuda:${CUDA_VERSION}-cudnn8-devel-ubuntu${UBUNTU_VERSION}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
+
 # For opencv 
 RUN apt-get update && apt-get install -y ffmpeg libsm6 libxext6 
 RUN apt-get -y purge python3.8 python3-pip && apt-get -y autoremove
@@ -13,7 +14,6 @@ RUN apt-get -y install software-properties-common
 RUN add-apt-repository ppa:deadsnakes/ppa
 RUN apt-get update && apt-get install -y python3.10 python3-pip 
 RUN apt-get -y install python3.10-distutils
-# RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10 && python3.10 get-pip.py
 RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
 
 # Symlink python3.10
