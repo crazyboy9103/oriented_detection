@@ -10,7 +10,7 @@ from torchvision.models.detection.anchor_utils import AnchorGenerator
 
 from ops import boxes as box_ops
 from models.detection import det_utils
-
+from models.detection.box_coders import BoxCoder, HBoxCoder, OBoxCoder
 
 class RPNHead(nn.Module):
     """
@@ -139,7 +139,7 @@ class RegionProposalNetwork(nn.Module):
     """
 
     __annotations__ = {
-        "box_coder": det_utils.BoxCoder,
+        "box_coder": BoxCoder,
         "proposal_matcher": det_utils.Matcher,
         "fg_bg_sampler": det_utils.BalancedPositiveNegativeSampler,
     }
@@ -162,7 +162,7 @@ class RegionProposalNetwork(nn.Module):
         super().__init__()
         self.anchor_generator = anchor_generator
         self.head = head
-        self.box_coder = det_utils.BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
+        self.box_coder = BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
 
         # used during training
         self.box_similarity = box_ops.box_iou
