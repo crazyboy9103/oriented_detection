@@ -110,8 +110,7 @@ def poly2obb(polys, version='oc'):
         results = poly2obb_le90(polys)
     else:
         raise NotImplementedError
-    return results
-
+    return results    
 
 def poly2obb_np(polys, version='oc'):
     """Convert polygons to oriented bounding boxes.
@@ -133,6 +132,34 @@ def poly2obb_np(polys, version='oc'):
         raise NotImplementedError
     return results
 
+def poly2hbb_np(polys, version='xyxy'):
+    """Convert polygons to horizontal bounding boxes.
+    
+    """
+    if version == 'xyxy':
+        results = poly2hbb_np_xyxy(polys)
+    elif version == 'xywh':
+        results = poly2hbb_np_xywh(polys)
+    else:
+        raise NotImplementedError
+
+    return results
+
+def poly2hbb_np_xyxy(polys):
+    if polys.shape[-1] == 8:
+        polys = polys.reshape(4, 2)
+        
+    x1, y1 = polys.min(axis=0)
+    x2, y2 = polys.max(axis=0)
+    return np.array([x1, y1, x2, y2])
+
+def poly2hbb_np_xywh(polys):
+    if polys.shape[-1] == 8:
+        polys = polys.reshape(4, 2)
+    
+    cx, cy = polys.mean(axis=0)
+    w, h = polys.max(axis=0) - polys.min(axis=0)
+    return np.array([cx, cy, w, h])
 
 def obb2hbb(rbboxes, version='oc'):
     """Convert oriented bounding boxes to horizontal bounding boxes.

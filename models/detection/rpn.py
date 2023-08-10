@@ -7,9 +7,9 @@ from torch.nn import functional as F
 from torchvision.ops import Conv2dNormActivation
 from torchvision.models.detection.image_list import ImageList
 from torchvision.models.detection.anchor_utils import AnchorGenerator
+from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection import det_utils
 from models.detection.box_coders import BoxCoder, HBoxCoder, OBoxCoder
 
 class RPNHead(nn.Module):

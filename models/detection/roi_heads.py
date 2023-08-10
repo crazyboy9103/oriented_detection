@@ -5,9 +5,10 @@ import torch.nn.functional as F
 import torchvision
 from torch import nn, Tensor
 from torchvision.ops import roi_align
+from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection import det_utils
+# from models.detection import det_utils
 from models.detection.box_coders import BoxCoder, HBoxCoder, OBoxCoder
 
 
@@ -54,7 +55,7 @@ def rotated_fastrcnn_loss(class_logits, box_regression, obox_regression, labels,
 
 class RoIHeads(nn.Module):
     __annotations__ = {
-        "box_coder": BoxCoder,
+        "box_coder": HBoxCoder,
         "proposal_matcher": det_utils.Matcher,
         "fg_bg_sampler": det_utils.BalancedPositiveNegativeSampler,
     }
@@ -85,7 +86,7 @@ class RoIHeads(nn.Module):
 
         if bbox_reg_weights is None:
             bbox_reg_weights = (10.0, 10.0, 5.0, 5.0, 10.0)
-        self.box_coder = BoxCoder(bbox_reg_weights)
+        self.box_coder = HBoxCoder(bbox_reg_weights)
 
         self.box_roi_pool = box_roi_pool
         self.box_head = box_head
@@ -108,6 +109,8 @@ class RoIHeads(nn.Module):
                 )
                 labels_in_image = torch.zeros((proposals_in_image.shape[0],), dtype=torch.int64, device=device)
             else:
+                # gt_boxes are in rotated format (cx, cy, w, h, a)
+                # proposals are in horizontal format (x1, y1, x2, y2)
                 match_quality_matrix = self.box_similarity(gt_boxes_in_image, proposals_in_image)
                 matched_idxs_in_image = self.proposal_matcher(match_quality_matrix)
 

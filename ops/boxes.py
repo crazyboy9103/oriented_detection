@@ -19,6 +19,7 @@ from torchvision.ops import (
 from ops._box_convert import (
     rbbox2result,
     rbbox2roi,
+    poly2hbb_np,
     poly2obb,
     poly2obb_np,
     obb2hbb,

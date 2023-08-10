@@ -8,11 +8,14 @@ charset-normalizer==3.2.0
 cmake==3.27.1
 Cython==3.0.0
 dbus-python==1.2.16
+-e git+https://github.com/crazyboy9103/oriented_detection@6e6ed46d435ab2498aeebc8deb378ec8ff35a4fc#egg=detectron2
 distro-info==0.23+ubuntu1.1
+exceptiongroup==1.1.2
 filelock==3.12.2
 frozenlist==1.4.0
 fsspec==2023.6.0
 idna==2.8
+iniconfig==2.0.0
 Jinja2==3.1.2
 lightning-utilities==0.9.0
 lit==16.0.6
@@ -35,7 +38,9 @@ nvidia-nvtx-cu11==11.7.91
 opencv-python==4.8.0.76
 packaging==23.1
 Pillow==10.0.0
+pluggy==1.2.0
 PyGObject==3.36.0
+pytest==7.4.0
 python-apt==2.0.1+ubuntu0.20.4.1
 pytorch-lightning==2.0.6
 PyYAML==6.0.1
@@ -43,6 +48,7 @@ requests==2.22.0
 requests-unixsocket==0.2.0
 six==1.14.0
 sympy==1.12
+tomli==2.0.1
 torch==2.0.1
 torchmetrics==1.0.2
 torchvision==0.15.2

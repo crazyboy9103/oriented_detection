@@ -110,7 +110,7 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
 
     Args:
         gt_bboxes (Tensor[-1, 5]): rotated reference boxes ``(cx, cy, w, h, a)``
-        bboxes (Tensor[-1, 4]): rotated boxes to be encoded ``(x1, y1, x2, y2)``
+        bboxes (Tensor[-1, 4]): boxes to be encoded ``(x1, y1, x2, y2)``
         weights (Tensor[5]): the weights for ``(x, y, w, h, a)``
     """
 
