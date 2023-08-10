@@ -79,23 +79,23 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("get_cuda_version", &get_cuda_version, "get_cuda_version");
   m.def("has_cuda", &has_cuda, "has_cuda");
 
-  m.def("deform_conv_forward", &deform_conv_forward, "deform_conv_forward");
-  m.def(
-      "deform_conv_backward_input",
-      &deform_conv_backward_input,
-      "deform_conv_backward_input");
-  m.def(
-      "deform_conv_backward_filter",
-      &deform_conv_backward_filter,
-      "deform_conv_backward_filter");
-  m.def(
-      "modulated_deform_conv_forward",
-      &modulated_deform_conv_forward,
-      "modulated_deform_conv_forward");
-  m.def(
-      "modulated_deform_conv_backward",
-      &modulated_deform_conv_backward,
-      "modulated_deform_conv_backward");
+  // m.def("deform_conv_forward", &deform_conv_forward, "deform_conv_forward");
+  // m.def(
+  //     "deform_conv_backward_input",
+  //     &deform_conv_backward_input,
+  //     "deform_conv_backward_input");
+  // m.def(
+  //     "deform_conv_backward_filter",
+  //     &deform_conv_backward_filter,
+  //     "deform_conv_backward_filter");
+  // m.def(
+  //     "modulated_deform_conv_forward",
+  //     &modulated_deform_conv_forward,
+  //     "modulated_deform_conv_forward");
+  // m.def(
+  //     "modulated_deform_conv_backward",
+  //     &modulated_deform_conv_backward,
+  //     "modulated_deform_conv_backward");
 
   m.def("COCOevalAccumulate", &COCOeval::Accumulate, "COCOeval::Accumulate");
   m.def(
@@ -106,12 +106,18 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def(pybind11::init<uint64_t, double, double, bool, bool>());
   pybind11::class_<COCOeval::ImageEvaluation>(m, "ImageEvaluation")
       .def(pybind11::init<>());
-}
 
-TORCH_LIBRARY(detectron2, m) {
+  
   m.def("nms_rotated", &nms_rotated);
   m.def("box_iou_rotated", &box_iou_rotated);
   m.def("roi_align_rotated_forward", &ROIAlignRotated_forward);
   m.def("roi_align_rotated_backward", &ROIAlignRotated_backward);
 }
+
+// TORCH_LIBRARY(detectron2, m) {
+//   m.def("nms_rotated", &nms_rotated);
+//   m.def("box_iou_rotated", &box_iou_rotated);
+//   m.def("roi_align_rotated_forward", &ROIAlignRotated_forward);
+//   m.def("roi_align_rotated_backward", &ROIAlignRotated_backward);
+// }
 } // namespace detectron2

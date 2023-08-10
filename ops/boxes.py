@@ -16,7 +16,7 @@ from torchvision.ops import (
     masks_to_boxes
 )
 
-from _box_convert import (
+from ops._box_convert import (
     rbbox2result,
     rbbox2roi,
     poly2obb,
@@ -28,7 +28,7 @@ from _box_convert import (
     hbb2obb,
     norm_angle
 )
-from torch.ops.detectron2 import (
+from detectron2._C import (
     nms_rotated,
     box_iou_rotated,
     roi_align_rotated_forward,

@@ -147,7 +147,7 @@ class RegionProposalNetwork(nn.Module):
     def __init__(
         self,
         anchor_generator: AnchorGenerator,
-        head: nn.Module,
+        head: RPNHead,
         # Faster-RCNN Training
         fg_iou_thresh: float,
         bg_iou_thresh: float,

@@ -10,6 +10,48 @@ from ops import boxes as box_ops
 from models.detection import det_utils
 from models.detection.box_coders import BoxCoder, HBoxCoder, OBoxCoder
 
+
+def rotated_fastrcnn_loss(class_logits, box_regression, obox_regression, labels, regression_targets):
+    # type: (Tensor, Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor, Tensor]
+    """
+    Computes the loss for Rotated Faster R-CNN.
+
+    Args:
+        class_logits (Tensor)
+        box_regression (Tensor)
+        obox_regression (Tensor)
+        labels (list[BoxList])
+        regression_targets (Tensor)
+
+    Returns:
+        classification_loss (Tensor)
+        box_loss (Tensor)
+        obox_loss (Tensor)
+    """
+
+    labels = torch.cat(labels, dim=0)
+    regression_targets = torch.cat(regression_targets, dim=0)
+
+    classification_loss = F.cross_entropy(class_logits, labels)
+
+    # get indices that correspond to the regression targets for
+    # the corresponding ground truth labels, to be used with
+    # advanced indexing
+    sampled_pos_inds_subset = torch.where(labels > 0)[0]
+    labels_pos = labels[sampled_pos_inds_subset]
+    N, num_classes = class_logits.shape
+    box_regression = box_regression.reshape(N, box_regression.size(-1) // 4, 4)
+
+    box_loss = F.smooth_l1_loss(
+        box_regression[sampled_pos_inds_subset, labels_pos],
+        regression_targets[sampled_pos_inds_subset],
+        beta=1 / 9,
+        reduction="sum",
+    )
+    box_loss = box_loss / labels.numel()
+
+    return classification_loss, box_loss
+
 class RoIHeads(nn.Module):
     __annotations__ = {
         "box_coder": BoxCoder,
@@ -241,7 +283,7 @@ class RoIHeads(nn.Module):
 
         box_features = self.box_roi_pool(features, proposals, image_shapes)
         box_features = self.box_head(box_features)
-        class_logits, box_regression = self.box_predictor(box_features)
+        class_logits, box_regression, obox_regression = self.box_predictor(box_features)
 
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
@@ -250,8 +292,8 @@ class RoIHeads(nn.Module):
                 raise ValueError("labels cannot be None")
             if regression_targets is None:
                 raise ValueError("regression_targets cannot be None")
-            loss_classifier, loss_box_reg = fastrcnn_loss(class_logits, box_regression, labels, regression_targets)
-            losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg}
+            loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(class_logits, box_regression, obox_regression, labels, regression_targets)
+            losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg, "loss_obox_reg": loss_obox_reg}
         else:
             boxes, scores, labels = self.postprocess_detections(class_logits, box_regression, proposals, image_shapes)
             num_images = len(boxes)

@@ -59,7 +59,8 @@ class RotatedFastRCNNPredictor(nn.Module):
     def __init__(self, in_channels, num_classes):
         super().__init__()
         self.cls_score = nn.Linear(in_channels, num_classes)
-        self.bbox_pred = nn.Linear(in_channels, num_classes * 5)
+        self.bbox_pred = nn.Linear(in_channels, num_classes * 4)
+        self.obbox_pred = nn.Linear(in_channels, num_classes * 5)
 
     def forward(self, x):
         if x.dim() == 4:
@@ -70,7 +71,8 @@ class RotatedFastRCNNPredictor(nn.Module):
         x = x.flatten(start_dim=1)
         scores = self.cls_score(x)
         bbox_deltas = self.bbox_pred(x)
-        return scores, bbox_deltas
+        obbox_deltas = self.obbox_pred(x)
+        return scores, bbox_deltas, obbox_deltas
     
 class RotatedFasterRCNN(GeneralizedRCNN):
     def __init__(
@@ -198,8 +200,6 @@ class RotatedFasterRCNN(GeneralizedRCNN):
 
         images, targets = self.transform(images, targets)
 
-        # Check for degenerate boxes
-        # TODO: Move this to a function
         if targets is not None:
             _check_for_degenerate_boxes(targets)
 
