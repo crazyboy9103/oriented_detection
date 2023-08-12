@@ -34,12 +34,24 @@ def _default_anchor_generator():
 
 def _check_for_degenerate_boxes(targets):
     for target_idx, target in enumerate(targets):
-        boxes = target["boxes"]
+        boxes = target["bboxes"]
         degenerate_boxes = boxes[:, 2:] <= boxes[:, :2]
         if degenerate_boxes.any():
             # print the first degenerate box
             bb_idx = torch.where(degenerate_boxes.any(dim=1))[0][0]
             degen_bb: List[float] = boxes[bb_idx].tolist()
+            torch._assert(
+                False,
+                "All bounding boxes should have positive height and width."
+                f" Found invalid box {degen_bb} for target at index {target_idx}.",
+            )
+        
+        oboxes = target["oboxes"]
+        degenerate_oboxes = oboxes[:, 2:] <= 0
+        if degenerate_oboxes.any():
+            # print the first degenerate box
+            bb_idx = torch.where(degenerate_oboxes.any(dim=1))[0][0]
+            degen_bb: List[float] = oboxes[bb_idx].tolist()
             torch._assert(
                 False,
                 "All bounding boxes should have positive height and width."
@@ -180,14 +192,23 @@ class RotatedFasterRCNN(GeneralizedRCNN):
                 torch._assert(False, "targets should not be none when in training mode")
             else:
                 for target in targets:
-                    boxes = target["boxes"]
+                    boxes = target["bboxes"]
                     if isinstance(boxes, torch.Tensor):
                         torch._assert(
-                            len(boxes.shape) == 2 and boxes.shape[-1] == 5,
-                            f"Expected target boxes to be a tensor of shape [N, 5], got {boxes.shape}.",
+                            len(boxes.shape) == 2 and boxes.shape[-1] == 4,
+                            f"Expected target boxes to be a tensor of shape [N, 4], got {boxes.shape}.",
                         )
                     else:
                         torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(boxes)}.")
+                        
+                    oboxes = target["oboxes"]
+                    if isinstance(oboxes, torch.Tensor):
+                        torch._assert(
+                            len(oboxes.shape) == 2 and oboxes.shape[-1] == 5,
+                            f"Expected target boxes to be a tensor of shape [N, 5], got {oboxes.shape}.",
+                        )
+                    else:
+                        torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(oboxes)}.")
 
         original_image_sizes: List[Tuple[int, int]] = []
         for img in images:
@@ -221,8 +242,13 @@ class RotatedFasterRCNN(GeneralizedRCNN):
                 self._has_warned = True
             return losses, detections
         else:
-            return self.eager_outputs(losses, detections)    
-        
+            if self.training:
+                return losses
+            
+            if targets:
+                return losses, detections
+            
+            return detections
     
 def rotated_fasterrcnn_resnet50_fpn_v2(
     pretrained: bool = True,
@@ -238,7 +264,7 @@ def rotated_fasterrcnn_resnet50_fpn_v2(
     weights_backbone = ResNet50_Weights.IMAGENET1K_V1 if (pretrained_backbone and weights is None) else None
     weights_backbone = ResNet50_Weights.verify(weights_backbone)
     
-    if weights:
+    if weights and num_classes is None:
         num_classes = len(weights.meta["categories"])
     
     is_trained = weights is not None or weights_backbone is not None
@@ -262,8 +288,8 @@ def rotated_fasterrcnn_resnet50_fpn_v2(
         **kwargs,
     )
 
-    if weights is not None:
-        model.load_state_dict(weights.get_state_dict(progress=progress))
+    if weights and num_classes is None:
+        model.load_state_dict(weights.get_state_dict(progress=progress), strict=False)
 
     return model 
         

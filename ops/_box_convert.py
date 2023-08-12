@@ -255,6 +255,9 @@ def hbb2obb(hbboxes, version='oc'):
     Returns:
         obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
     """
+    if isinstance(hbboxes, list):
+        hbboxes = torch.stack(hbboxes)
+        
     if version == 'oc':
         results = hbb2obb_oc(hbboxes)
     elif version == 'le135':

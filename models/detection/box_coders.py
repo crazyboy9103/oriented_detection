@@ -5,6 +5,8 @@ import math
 import torch
 from torch import Tensor 
 
+from ops.boxes import hbb2obb 
+
 class BaseBoxCoder(metaclass=ABCMeta):
     """
     Abstract base class for box encoders.
@@ -121,29 +123,24 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     wh = weights[3]
     wa = weights[4]
     
-    bboxes_x1 = bboxes[:, 0].unsqueeze(1)
-    bboxes_y1 = bboxes[:, 1].unsqueeze(1)
-    bboxes_x2 = bboxes[:, 2].unsqueeze(1)
-    bboxes_y2 = bboxes[:, 3].unsqueeze(1)
-
+    bboxes = hbb2obb(bboxes, version='oc')
+    ex_ctr_x = bboxes[:, 0].unsqueeze(1)
+    ex_ctr_y = bboxes[:, 1].unsqueeze(1)
+    ex_widths = bboxes[:, 2].unsqueeze(1)
+    ex_heights = bboxes[:, 3].unsqueeze(1)
+    ex_angles = bboxes[:, 4].unsqueeze(1)
+    
     gt_ctr_x = gt_bboxes[:, 0].unsqueeze(1)
     gt_ctr_y = gt_bboxes[:, 1].unsqueeze(1)
     gt_widths = gt_bboxes[:, 2].unsqueeze(1)
     gt_heights = gt_bboxes[:, 3].unsqueeze(1)
     gt_angles = gt_bboxes[:, 4].unsqueeze(1)
-    
-    # implementation starts here
-    ex_widths = bboxes_x2 - bboxes_x1
-    ex_heights = bboxes_y2 - bboxes_y1
-    ex_ctr_x = bboxes_x1 + 0.5 * ex_widths
-    ex_ctr_y = bboxes_y1 + 0.5 * ex_heights
 
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
     targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
     targets_dw = ww * torch.log(gt_widths / ex_widths)
     targets_dh = wh * torch.log(gt_heights / ex_heights)
-    targets_da = wa * gt_angles
-    
+    targets_da = wa * (gt_angles - ex_angles)
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh, targets_da), dim=1)
     return targets
 
@@ -205,6 +202,8 @@ class HBoxCoder(BaseBoxCoder):
     
     def decode_single(self, pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, box_sum: int) -> Tensor:
         assert pred_bboxes.size(0) == bboxes.size(0)
+        # assert pred_bboxes.size(-1) == 5
+        # assert bboxes.size(-1) == 4
         if pred_bboxes.ndim == 3:
             assert pred_bboxes.size(1) == bboxes.size(1)
         pred_boxes = decode_hboxes(pred_bboxes, bboxes, weights, self.bbox_xform_clip)

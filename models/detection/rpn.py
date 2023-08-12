@@ -198,7 +198,7 @@ class RegionProposalNetwork(nn.Module):
         labels = []
         matched_gt_boxes = []
         for anchors_per_image, targets_per_image in zip(anchors, targets):
-            gt_boxes = targets_per_image["boxes"]
+            gt_boxes = targets_per_image["bboxes"]
 
             if gt_boxes.numel() == 0:
                 # Background image (negative example)

@@ -5,8 +5,6 @@ from torch.utils.data import DataLoader
 from torchvision.models.detection import faster_rcnn
 from torchvision.transforms import functional as F
 from pytorch_lightning import LightningModule
-from pytorch_lightning.metrics.functional import accuracy
-from mvtec_dataset import MVTecDataset
 
 class OrientedRCNN(LightningModule):
     def __init__(self):
@@ -38,9 +36,9 @@ class OrientedRCNN(LightningModule):
         loss_dict = self.model(images, targets)
         loss = sum(loss for loss in loss_dict.values())
 
-        pred_boxes = outputs[0]['boxes']
+        pred_boxes = outputs[0]['bboxes']
         pred_labels = outputs[0]['labels']
-        target_boxes = targets[0]['boxes']
+        target_boxes = targets[0]['bboxes']
         target_labels = targets[0]['labels']
 
         acc = accuracy(pred_labels, target_labels)

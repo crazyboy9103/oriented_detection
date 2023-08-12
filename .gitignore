@@ -8,3 +8,7 @@ detectron2.egg-info/
 
 *.pt
 *.pth
+*.ckpt
+
+*.yaml
+*.csv

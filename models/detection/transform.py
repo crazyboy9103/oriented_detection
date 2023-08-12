@@ -10,7 +10,6 @@ from torchvision.models.detection.image_list import ImageList
 @torch.jit.unused
 def _get_shape_onnx(image: Tensor) -> Tensor:
     from torch.onnx import operators
-
     return operators.shape_as_tensor(image)[-2:]
 
 
@@ -33,6 +32,34 @@ def _resize_boxes(boxes: Tensor, original_size: List[int], new_size: List[int]) 
     ymin = ymin * ratio_height
     ymax = ymax * ratio_height
     return torch.stack((xmin, ymin, xmax, ymax), dim=1)
+
+def _resize_oboxes(oboxes: Tensor, original_size: List[int], new_size: List[int]) -> Tensor:
+    # Important: oboxes are (cx, cy, w, h, a)
+    ratios = [
+        torch.tensor(s, dtype=torch.float32, device=oboxes.device)
+        / torch.tensor(s_orig, dtype=torch.float32, device=oboxes.device)
+        for s, s_orig in zip(new_size, original_size)
+    ]
+    ratio_height, ratio_width = ratios
+    cx, cy, w, h, a = oboxes.unbind(1)
+
+    cx = cx * ratio_width
+    cy = cy * ratio_height
+    w = w * ratio_width
+    h = h * ratio_height
+    return torch.stack((cx, cy, w, h, a), dim=1)
+
+def _resize_polygons(polygons: Tensor, original_size: List[int], new_size: List[int]) -> Tensor:
+    ratios = [
+        torch.tensor(s, dtype=torch.float32, device=oboxes.device)
+        / torch.tensor(s_orig, dtype=torch.float32, device=oboxes.device)
+        for s, s_orig in zip(new_size, original_size)
+    ]
+    ratio_height, ratio_width = ratios
+    x1, y1, x2, y2, x3, y3, x4, y4 = polygons.unbind(1)
+    x1, x2, x3, x4 = x1 * ratio_width, x2 * ratio_width, x3 * ratio_width, x4 * ratio_width
+    y1, y2, y3, y4 = y1 * ratio_height, y2 * ratio_height, y3 * ratio_height, y4 * ratio_height
+    return torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), dim=1)
 
 def _resize_image(
     image: Tensor,
@@ -73,13 +100,7 @@ def _resize_image(
 
     if target is None:
         return image, target
-
-    # if "masks" in target:
-    #     mask = target["masks"]
-    #     mask = torch.nn.functional.interpolate(
-    #         mask[:, None].float(), size=size, scale_factor=scale_factor, recompute_scale_factor=recompute_scale_factor
-    #     )[:, 0].byte()
-    #     target["masks"] = mask
+    
     return image, target
 
 
@@ -132,12 +153,13 @@ class GeneralizedRCNNTransform(nn.Module):
                     data[k] = v
                 targets_copy.append(data)
             targets = targets_copy
-        for i in range(len(images)):
-            image = images[i]
+            
+        for i, image in enumerate(images):
             target_index = targets[i] if targets is not None else None
 
             if image.dim() != 3:
                 raise ValueError(f"images is expected to be a list of 3d tensors of shape [C, H, W], got {image.shape}")
+            
             image = self.normalize(image)
             image, target_index = self.resize(image, target_index)
             images[i] = image
@@ -195,12 +217,8 @@ class GeneralizedRCNNTransform(nn.Module):
         if target is None:
             return image, target
 
-        target["boxes"] = _resize_boxes(target["boxes"], (h, w), image.shape[-2:])
-
-        # if "keypoints" in target:
-        #     keypoints = target["keypoints"]
-        #     keypoints = resize_keypoints(keypoints, (h, w), image.shape[-2:])
-        #     target["keypoints"] = keypoints
+        target["bboxes"] = _resize_boxes(target["bboxes"], (h, w), image.shape[-2:])
+        target["oboxes"] = _resize_oboxes(target["oboxes"], (h, w), image.shape[-2:])
         return image, target
 
     # _onnx_batch_images() is an implementation of
@@ -263,15 +281,9 @@ class GeneralizedRCNNTransform(nn.Module):
         if self.training:
             return result
         for i, (pred, im_s, o_im_s) in enumerate(zip(result, image_shapes, original_image_sizes)):
-            result[i]["boxes"] = _resize_boxes(pred["boxes"], im_s, o_im_s)
-            # if "masks" in pred:
-            #     masks = pred["masks"]
-            #     masks = paste_masks_in_image(masks, boxes, o_im_s)
-            #     result[i]["masks"] = masks
-            # if "keypoints" in pred:
-            #     keypoints = pred["keypoints"]
-            #     keypoints = resize_keypoints(keypoints, im_s, o_im_s)
-            #     result[i]["keypoints"] = keypoints
+            result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
+            result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
+            
         return result
 
     def __repr__(self) -> str:
@@ -281,23 +293,4 @@ class GeneralizedRCNNTransform(nn.Module):
         format_string += f"{_indent}Resize(min_size={self.min_size}, max_size={self.max_size}, mode='bilinear')"
         format_string += "\n)"
         return format_string
-
-
-# def resize_keypoints(keypoints: Tensor, original_size: List[int], new_size: List[int]) -> Tensor:
-#     ratios = [
-#         torch.tensor(s, dtype=torch.float32, device=keypoints.device)
-#         / torch.tensor(s_orig, dtype=torch.float32, device=keypoints.device)
-#         for s, s_orig in zip(new_size, original_size)
-#     ]
-#     ratio_h, ratio_w = ratios
-#     resized_data = keypoints.clone()
-#     if torch._C._get_tracing_state():
-#         resized_data_0 = resized_data[:, :, 0] * ratio_w
-#         resized_data_1 = resized_data[:, :, 1] * ratio_h
-#         resized_data = torch.stack((resized_data_0, resized_data_1, resized_data[:, :, 2]), dim=2)
-#     else:
-#         resized_data[..., 0] *= ratio_w
-#         resized_data[..., 1] *= ratio_h
-#     return resized_data
-
 
