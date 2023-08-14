@@ -324,7 +324,7 @@ class RegionProposalNetwork(nn.Module):
         box_loss = F.smooth_l1_loss(
             pred_bbox_deltas[sampled_pos_inds],
             regression_targets[sampled_pos_inds],
-            beta=1 / 9,
+            beta=1.0,
             reduction="sum",
         ) / (sampled_inds.numel())
         

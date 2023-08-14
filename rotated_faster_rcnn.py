@@ -34,9 +34,9 @@ class RotatedFasterRCNNConfig:
     image_std: Optional[Tuple[float, float, float]] = None
     # RPN parameters
     rpn_pre_nms_top_n_train: int = 2000
-    rpn_pre_nms_top_n_test: int = 1000
+    rpn_pre_nms_top_n_test: int = 2000
     rpn_post_nms_top_n_train: int = 2000
-    rpn_post_nms_top_n_test: int = 1000
+    rpn_post_nms_top_n_test: int = 2000
     rpn_nms_thresh: float = 0.5
     rpn_fg_iou_thresh: float = 0.7
     rpn_bg_iou_thresh: float = 0.3
@@ -45,7 +45,7 @@ class RotatedFasterRCNNConfig:
     rpn_score_thresh: float = 0.05
     # Box parameters
     box_score_thresh: float = 0.05
-    box_nms_thresh: float = 0.5
+    box_nms_thresh: float = 0.1
     box_detections_per_img: int = 100
     box_fg_iou_thresh: float = 0.5
     box_bg_iou_thresh: float = 0.5
@@ -97,9 +97,11 @@ def plot_image(image, output, target):
 class RotatedFasterRCNN(LightningModule):
     def __init__(self, lr: float = 0.001):
         super(RotatedFasterRCNN, self).__init__()
-        self.model = rotated_fasterrcnn_resnet50_fpn_v2(**asdict(TrainConfig()), **asdict(RotatedFasterRCNNConfig(**asdict(MvtecDataConfig()))))
+        self.train_config = TrainConfig()
+        self.rfrcnn_config = RotatedFasterRCNNConfig(**asdict(MvtecDataConfig()))
+        
+        self.model = rotated_fasterrcnn_resnet50_fpn_v2(**asdict(self.train_config), **asdict(self.rfrcnn_config))
         self.lr = lr
-        self.save_hyperparameters()
         
         self.outputs = []
         
@@ -115,7 +117,8 @@ class RotatedFasterRCNN(LightningModule):
         loss = sum(loss for loss in loss_dict.values())
         for k, v in loss_dict.items():
             self.log(f'train-{k}', v.item())
-            
+        
+        self.save_hyperparameters()
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -125,7 +128,7 @@ class RotatedFasterRCNN(LightningModule):
         loss_dict, outputs = self(images, targets)
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
-        self.outputs.append(outputs)
+        # self.outputs.append(outputs)
         
         for image, image_path in (plot_image(image, output, target) for image, output, target in zip(images, outputs, targets)):
             self.logger.experiment.log_image(image, name=image_path.split('/')[-1])

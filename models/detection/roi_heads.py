@@ -35,30 +35,27 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
     N, num_classes = class_logits.shape
     
     box_labels = torch.cat(labels, dim=0)
-
-    def compute_box_loss(regression, labels, regression_targets, horizontal=True):
+    sampled_pos_inds_subset = torch.where(box_labels > 0)[0]
+    labels_pos = box_labels[sampled_pos_inds_subset]
+    def compute_box_loss(regression, regression_targets, horizontal=True):
         regression_targets = torch.cat(regression_targets, dim=0)
-        
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
         # advanced indexing
-        sampled_pos_inds_subset = torch.where(labels > 0)[0]
-        labels_pos = labels[sampled_pos_inds_subset]
-
         box_dim = 4 if horizontal else 5
         regression = regression.reshape(N, regression.size(-1) // box_dim, box_dim)
         box_loss = F.smooth_l1_loss(
             regression[sampled_pos_inds_subset, labels_pos],
             regression_targets[sampled_pos_inds_subset],
-            beta=1 / 9,
+            beta=1.0,
             reduction="sum",
         )
-        box_loss = box_loss / labels.numel()
+        box_loss = box_loss / box_labels.numel()
         return box_loss
     # Compute for horizontal branch 
-    hbox_loss = compute_box_loss(hbox_regression, box_labels, hbox_regression_targets, horizontal=True)
+    hbox_loss = compute_box_loss(hbox_regression, hbox_regression_targets, horizontal=True)
     # Compute for rotated branch
-    obox_loss = compute_box_loss(obox_regression, box_labels, obox_regression_targets, horizontal=False)
+    obox_loss = compute_box_loss(obox_regression, obox_regression_targets, horizontal=False)
     try:
         classification_loss = F.cross_entropy(class_logits, box_labels)
     except:
@@ -226,8 +223,9 @@ class RoIHeads(nn.Module):
             gt_hboxes_in_image = gt_boxes[img_id]
             gt_oboxes_in_image = gt_oboxes[img_id]
 
-            if gt_hboxes_in_image.numel() == 0 or gt_oboxes_in_image.numel() == 0:
+            if gt_hboxes_in_image.numel() == 0:
                 gt_hboxes_in_image = torch.zeros((1, 4), dtype=dtype, device=device)
+            if gt_oboxes_in_image.numel() == 0:
                 gt_oboxes_in_image = torch.zeros((1, 5), dtype=dtype, device=device)
                 
             matched_gt_hboxes.append(gt_hboxes_in_image[matched_idxs[img_id]])

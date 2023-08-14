@@ -31,7 +31,7 @@ from .transform import GeneralizedRCNNTransform
 
 def _default_anchor_generator():
     # sizes = scale x stride
-    sizes = ((32, 64, 128),) * 5
+    sizes = ((16, 64, 256),) * 5
     ratios = ((0.5, 1.0, 2.0),) * 5
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 
@@ -50,7 +50,7 @@ def _check_for_degenerate_boxes(targets):
             )
         
         oboxes = target["oboxes"]
-        degenerate_oboxes = oboxes[:, 2:] <= 0
+        degenerate_oboxes = oboxes[:, 2:4] <= 0
         if degenerate_oboxes.any():
             # print the first degenerate box
             bb_idx = torch.where(degenerate_oboxes.any(dim=1))[0][0]
@@ -278,7 +278,7 @@ def rotated_fasterrcnn_resnet50_fpn_v2(
     backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, [1, 2, 3, 4], norm_layer=nn.BatchNorm2d)
     
     rpn_anchor_generator = _default_anchor_generator()
-    rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)
+    rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=1)
     box_head = FastRCNNConvFCHead(
         (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=nn.BatchNorm2d
     )
