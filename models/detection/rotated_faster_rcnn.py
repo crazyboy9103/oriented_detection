@@ -31,7 +31,7 @@ from .transform import GeneralizedRCNNTransform
 
 def _default_anchor_generator():
     # sizes = scale x stride
-    sizes = ((32, 64, 128, 256, 512),) * 5
+    sizes = ((32, 64, 128),) * 5
     ratios = ((0.5, 1.0, 2.0),) * 5
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 

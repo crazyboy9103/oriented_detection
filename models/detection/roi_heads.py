@@ -254,8 +254,8 @@ class RoIHeads(nn.Module):
 
         boxes_per_image = [boxes_in_image.shape[0] for boxes_in_image in proposals]
 
-        pred_boxes = self.hbox_coder.decode(box_regression.detach(), proposals)
-        pred_oboxes = self.obox_coder.decode(obox_regression.detach(), proposals)
+        pred_boxes = self.hbox_coder.decode(box_regression, proposals)
+        pred_oboxes = self.obox_coder.decode(obox_regression, proposals)
         pred_scores = F.softmax(class_logits, -1)
 
 

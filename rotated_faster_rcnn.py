@@ -19,7 +19,7 @@ class MvtecDataConfig:
     
 @dataclass
 class TrainConfig:
-    pretrained: bool = True
+    pretrained: bool = False
     pretrained_backbone: bool = True
     progress: bool = True
     num_classes: Optional[int] = 13 + 1
@@ -129,7 +129,8 @@ class RotatedFasterRCNN(LightningModule):
         
         for image, image_path in (plot_image(image, output, target) for image, output, target in zip(images, outputs, targets)):
             self.logger.experiment.log_image(image, name=image_path)
-            
+        return loss_dict    
+        
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
         return optimizer
