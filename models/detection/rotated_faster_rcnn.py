@@ -30,7 +30,10 @@ from .rpn import RPNHead, RegionProposalNetwork
 from .transform import GeneralizedRCNNTransform
 
 def _default_anchor_generator():
-    return AnchorGenerator(sizes=((32,), (64,), (128,), (256,), (512,)), aspect_ratios=((0.5, 1.0, 2.0),) * 5)
+    # sizes = scale x stride
+    sizes = ((32, 64, 128, 256, 512),) * 5
+    ratios = ((0.5, 1.0, 2.0),) * 5
+    return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 
 def _check_for_degenerate_boxes(targets):
     for target_idx, target in enumerate(targets):
@@ -110,7 +113,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
         rpn_positive_fraction=0.5,
         rpn_score_thresh=0.0,
         # Box parameters
-        box_roi_pool: nn.Module = MultiScaleRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=2),
+        box_roi_pool: nn.Module = MultiScaleRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
         box_head: nn.Module = None,
         box_predictor: nn.Module = None,
         box_score_thresh=0.05,
@@ -260,18 +263,19 @@ def rotated_fasterrcnn_resnet50_fpn_v2(
 ):    
     weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1 if pretrained else None
     weights = FasterRCNN_ResNet50_FPN_V2_Weights.verify(weights)
-    
+    if weights and num_classes is None:
+        num_classes = len(weights.meta["categories"])
+        
     weights_backbone = ResNet50_Weights.IMAGENET1K_V1 if (pretrained_backbone and weights is None) else None
     weights_backbone = ResNet50_Weights.verify(weights_backbone)
     
-    if weights and num_classes is None:
-        num_classes = len(weights.meta["categories"])
+    
     
     is_trained = weights is not None or weights_backbone is not None
     trainable_backbone_layers = _validate_trainable_layers(is_trained, trainable_backbone_layers, max_value=5, default_value=3)
 
     backbone = resnet50(weights=weights_backbone, progress=progress)
-    backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, norm_layer=nn.BatchNorm2d)
+    backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, [1, 2, 3, 4], norm_layer=nn.BatchNorm2d)
     
     rpn_anchor_generator = _default_anchor_generator()
     rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)

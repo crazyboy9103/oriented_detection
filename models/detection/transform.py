@@ -1,11 +1,11 @@
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Literal
 
+import numpy as np
 import torch
 import torchvision
 from torch import nn, Tensor
 from torchvision.models.detection.image_list import ImageList
-
 
 @torch.jit.unused
 def _get_shape_onnx(image: Tensor) -> Tensor:
@@ -47,12 +47,59 @@ def _resize_oboxes(oboxes: Tensor, original_size: List[int], new_size: List[int]
     cy = cy * ratio_height
     w = w * ratio_width
     h = h * ratio_height
-    return torch.stack((cx, cy, w, h, a), dim=1)
+    output = torch.stack((cx, cy, w, h, a), dim=1)
+    assert output.shape == oboxes.shape
+    return output
+
+def _flip_boxes(boxes: Tensor, new_size: List[int], direction: Literal['horizontal', 'vertical', 'diagonal']) -> Tensor:
+    orig_shape = boxes.shape
+    boxes = boxes.reshape((-1, 4))
+    flipped = boxes.clone()
+    height, width = new_size
+    
+    if direction == 'horizontal':
+        flipped[..., 0::4] = width - boxes[..., 2::4]
+        flipped[..., 2::4] = width - boxes[..., 0::4]
+    elif direction == 'vertical':
+        flipped[..., 1::4] = height - boxes[..., 3::4]
+        flipped[..., 3::4] = height - boxes[..., 1::4]
+    elif direction == 'diagonal':
+        flipped[..., 0::4] = width - boxes[..., 2::4]
+        flipped[..., 1::4] = height - boxes[..., 3::4]
+        flipped[..., 2::4] = width - boxes[..., 0::4]
+        flipped[..., 3::4] = height - boxes[..., 1::4]
+    else:
+        raise ValueError(f'Invalid flipping direction "{direction}"')
+    
+    return flipped.reshape(orig_shape)
+
+def _flip_oboxes(oboxes: Tensor, new_size: List[int], direction: Literal['horizontal', 'vertical', 'diagonal']) -> Tensor:
+    orig_shape = oboxes.shape
+    oboxes = oboxes.reshape((-1, 5))
+    flipped = oboxes.clone()
+    height, width = new_size
+    
+    if direction == 'horizontal':
+        flipped[:, 0] = width - oboxes[:, 0] - 1
+    elif direction == 'vertical':
+        flipped[:, 1] = height - oboxes[:, 1] - 1
+    elif direction == 'diagonal':
+        flipped[:, 0] = width - oboxes[:, 0] - 1
+        flipped[:, 1] = height - oboxes[:, 1] - 1
+        return flipped.reshape(orig_shape)
+    else:
+        raise ValueError(f'Invalid flipping direction "{direction}"')
+    
+    rotated_flag = (oboxes[:, 4] != np.pi / 2)
+    flipped[rotated_flag, 4] = np.pi / 2 - oboxes[rotated_flag, 4]
+    flipped[rotated_flag, 2] = oboxes[rotated_flag, 3]
+    flipped[rotated_flag, 3] = oboxes[rotated_flag, 2]
+    return flipped.reshape(orig_shape)
 
 def _resize_polygons(polygons: Tensor, original_size: List[int], new_size: List[int]) -> Tensor:
     ratios = [
-        torch.tensor(s, dtype=torch.float32, device=oboxes.device)
-        / torch.tensor(s_orig, dtype=torch.float32, device=oboxes.device)
+        torch.tensor(s, dtype=torch.float32, device=polygons.device)
+        / torch.tensor(s_orig, dtype=torch.float32, device=polygons.device)
         for s, s_orig in zip(new_size, original_size)
     ]
     ratio_height, ratio_width = ratios
@@ -135,7 +182,8 @@ class GeneralizedRCNNTransform(nn.Module):
         self.image_std = image_std
         self.size_divisible = size_divisible
         self.fixed_size = fixed_size
-        self._skip_resize = kwargs.pop("_skip_resize", False)
+        self._skip_resize = kwargs.pop("_skip_resize", False),
+        self._skip_flip = kwargs.pop("_skip_flip", False),
 
     def forward(
         self, images: List[Tensor], targets: Optional[List[Dict[str, Tensor]]] = None
@@ -162,6 +210,8 @@ class GeneralizedRCNNTransform(nn.Module):
             
             image = self.normalize(image)
             image, target_index = self.resize(image, target_index)
+            
+            image, target_index = self.flip_bboxes(image, target_index)
             images[i] = image
             if targets is not None and target_index is not None:
                 targets[i] = target_index
@@ -219,6 +269,29 @@ class GeneralizedRCNNTransform(nn.Module):
 
         target["bboxes"] = _resize_boxes(target["bboxes"], (h, w), image.shape[-2:])
         target["oboxes"] = _resize_oboxes(target["oboxes"], (h, w), image.shape[-2:])
+        return image, target
+    
+    def flip_bboxes(
+        self,
+        image: Tensor,
+        target: Optional[Dict[str, Tensor]] = None,
+    ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
+        if self._skip_flip or self.training is False or target is None:
+            return image, target
+            
+        direction = self.torch_choice(['horizontal', 'vertical', 'diagonal'])
+        
+        if direction == 'horizontal':
+            image = torch.flip(image, [1])
+            
+        elif direction == 'vertical':
+            image = torch.flip(image, [0])
+        
+        elif direction == 'diagonal':
+            image = torch.flip(image, [0, 1])
+
+        target["bboxes"] = _flip_boxes(target["bboxes"], image.shape[-2:], direction)
+        target["oboxes"] = _flip_oboxes(target["oboxes"], image.shape[-2:], direction)
         return image, target
 
     # _onnx_batch_images() is an implementation of

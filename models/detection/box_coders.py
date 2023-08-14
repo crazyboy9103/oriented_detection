@@ -123,12 +123,21 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     wh = weights[3]
     wa = weights[4]
     
-    bboxes = hbb2obb(bboxes, version='oc')
-    ex_ctr_x = bboxes[:, 0].unsqueeze(1)
-    ex_ctr_y = bboxes[:, 1].unsqueeze(1)
-    ex_widths = bboxes[:, 2].unsqueeze(1)
-    ex_heights = bboxes[:, 3].unsqueeze(1)
-    ex_angles = bboxes[:, 4].unsqueeze(1)
+    # bboxes = hbb2obb(bboxes, version='oc')
+    # ex_ctr_x = bboxes[:, 0].unsqueeze(1)
+    # ex_ctr_y = bboxes[:, 1].unsqueeze(1)
+    # ex_widths = bboxes[:, 2].unsqueeze(1)
+    # ex_heights = bboxes[:, 3].unsqueeze(1)
+    # ex_angles = bboxes[:, 4].unsqueeze(1)
+    bboxes_x1 = bboxes[:, 0].unsqueeze(1)
+    bboxes_y1 = bboxes[:, 1].unsqueeze(1)
+    bboxes_x2 = bboxes[:, 2].unsqueeze(1)
+    bboxes_y2 = bboxes[:, 3].unsqueeze(1)
+
+    ex_widths = bboxes_x2 - bboxes_x1
+    ex_heights = bboxes_y2 - bboxes_y1
+    ex_ctr_x = bboxes_x1 + 0.5 * ex_widths
+    ex_ctr_y = bboxes_y1 + 0.5 * ex_heights
     
     gt_ctr_x = gt_bboxes[:, 0].unsqueeze(1)
     gt_ctr_y = gt_bboxes[:, 1].unsqueeze(1)
@@ -140,7 +149,7 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
     targets_dw = ww * torch.log(gt_widths / ex_widths)
     targets_dh = wh * torch.log(gt_heights / ex_heights)
-    targets_da = wa * (gt_angles - ex_angles)
+    targets_da = wa * gt_angles
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh, targets_da), dim=1)
     return targets
 
@@ -150,7 +159,12 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     heights = bboxes[:, 3] - bboxes[:, 1]
     ctr_x = bboxes[:, 0] + 0.5 * widths
     ctr_y = bboxes[:, 1] + 0.5 * heights
-
+    # bboxes = hbb2obb(bboxes, version='oc')
+    # ctr_x = bboxes[:, 0]
+    # ctr_y = bboxes[:, 1]
+    # widths = bboxes[:, 2]
+    # heights = bboxes[:, 3]
+    
     wx, wy, ww, wh, wa = weights
     dx = pred_bboxes[:, 0::5] / wx
     dy = pred_bboxes[:, 1::5] / wy
@@ -167,16 +181,16 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_h = torch.exp(dh) * heights[:, None]
     
     # Distance from center to box's corner.
-    c_to_c_h = torch.tensor(0.5, dtype=pred_ctr_y.dtype, device=pred_h.device) * pred_h
-    c_to_c_w = torch.tensor(0.5, dtype=pred_ctr_x.dtype, device=pred_w.device) * pred_w
+    # c_to_c_h = torch.tensor(0.5, dtype=pred_ctr_y.dtype, device=pred_h.device) * pred_h
+    # c_to_c_w = torch.tensor(0.5, dtype=pred_ctr_x.dtype, device=pred_w.device) * pred_w
 
-    pred_boxes1 = pred_ctr_x - c_to_c_w
-    pred_boxes2 = pred_ctr_y - c_to_c_h
-    pred_boxes3 = pred_ctr_x + c_to_c_w
-    pred_boxes4 = pred_ctr_y + c_to_c_h
+    # pred_boxes1 = pred_ctr_x - c_to_c_w
+    # pred_boxes2 = pred_ctr_y - c_to_c_h
+    # pred_boxes3 = pred_ctr_x + c_to_c_w
+    # pred_boxes4 = pred_ctr_y + c_to_c_h
     pred_a = da 
-    pred_boxes = torch.stack((pred_boxes1, pred_boxes2, pred_boxes3, pred_boxes4, pred_a), dim=2).flatten(1)
-    return pred_boxes 
+    pred_boxes = torch.stack((pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a), dim=1).flatten(1)
+    return pred_boxes
 
 class HBoxCoder(BaseBoxCoder):
     def __init__(self, weights: Tuple[float, float, float, float, float], bbox_xform_clip: float = math.log(1000.0 / 16)):
@@ -208,7 +222,7 @@ class HBoxCoder(BaseBoxCoder):
             assert pred_bboxes.size(1) == bboxes.size(1)
         pred_boxes = decode_hboxes(pred_bboxes, bboxes, weights, self.bbox_xform_clip)
         if box_sum > 0:
-            pred_bboxes = pred_bboxes.reshape(box_sum, -1, 5)
+            pred_boxes = pred_boxes.reshape(box_sum, -1, 5)
         return pred_boxes
 
 class OBoxCoder(BaseBoxCoder):
@@ -239,7 +253,7 @@ class OBoxCoder(BaseBoxCoder):
         if pred_bboxes.ndim == 3:
             assert pred_bboxes.size(1) == bboxes.size(1)
         # TODO: implement decode_oboxes
-        # pred_boxes = decode_oboxes(pred_bboxes, bboxes, weights, self.bbox_xform_clip)
+        # pred_bboxes = decode_oboxes(pred_bboxes, bboxes, weights, self.bbox_xform_clip)
         if box_sum > 0:
             pred_bboxes = pred_bboxes.reshape(box_sum, -1, 5)
         return pred_bboxes
@@ -350,5 +364,5 @@ class BoxCoder(BaseBoxCoder):
     def decode_single(self, pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, box_sum: int) -> Tensor:
         pred_boxes = decode_boxes(pred_bboxes, bboxes, weights, self.bbox_xform_clip)
         if box_sum > 0:
-            pred_bboxes = pred_bboxes.reshape(box_sum, -1, 4)
+            pred_boxes = pred_boxes.reshape(box_sum, -1, 4)
         return pred_boxes

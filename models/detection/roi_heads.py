@@ -47,7 +47,6 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
 
         box_dim = 4 if horizontal else 5
         regression = regression.reshape(N, regression.size(-1) // box_dim, box_dim)
-
         box_loss = F.smooth_l1_loss(
             regression[sampled_pos_inds_subset, labels_pos],
             regression_targets[sampled_pos_inds_subset],
@@ -60,7 +59,11 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
     hbox_loss = compute_box_loss(hbox_regression, box_labels, hbox_regression_targets, horizontal=True)
     # Compute for rotated branch
     obox_loss = compute_box_loss(obox_regression, box_labels, obox_regression_targets, horizontal=False)
-    classification_loss = F.cross_entropy(class_logits, box_labels)
+    try:
+        classification_loss = F.cross_entropy(class_logits, box_labels)
+    except:
+        classification_loss = torch.tensor(0.0)
+        
     return classification_loss, hbox_loss, obox_loss
 
 class RoIHeads(nn.Module):
@@ -98,7 +101,7 @@ class RoIHeads(nn.Module):
         self.fg_bg_sampler = det_utils.BalancedPositiveNegativeSampler(batch_size_per_image, positive_fraction)
 
         if bbox_reg_weights is None:
-            bbox_reg_weights = (10.0, 10.0, 5.0, 5.0, 10.0)
+            bbox_reg_weights = (1, 1, 1, 1, 1)
         
         self.obox_coder = HBoxCoder(bbox_reg_weights)
         self.hbox_coder = BoxCoder(bbox_reg_weights[:4])
@@ -124,15 +127,21 @@ class RoIHeads(nn.Module):
                 )
                 labels_in_image = torch.zeros((proposals_in_image.shape[0],), dtype=torch.int64, device=device)
             else:
-                horizontal_match_quality_matrix = self.horizontal_box_similarity(gt_boxes_in_image, proposals_in_image)
+                # horizontal_match_quality_matrix = self.horizontal_box_similarity(gt_boxes_in_image, proposals_in_image)
                 # rotated gt_boxes are in rotated format (cx, cy, w, h, a)
                 # proposals are in horizontal format (x1, y1, x2, y2)
                 # TODO support le90 and le135
-                rorated_proposals_in_image = box_ops.hbb2obb(proposals_in_image, version="oc")
-                rotated_match_quality_matrix = self.rotated_box_similarity(gt_oboxes_in_image, rorated_proposals_in_image)
+                x1, y1, x2, y2 = proposals_in_image[:, 0:1], proposals_in_image[:, 1:2], proposals_in_image[:, 2:3], proposals_in_image[:, 3:4]
+                cx, cy, w, h = (x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1
+                a = torch.zeros_like(cx)
                 
-                assert horizontal_match_quality_matrix.size() == rotated_match_quality_matrix.size()
-                match_quality_matrix = (horizontal_match_quality_matrix + rotated_match_quality_matrix) / 2
+                rotated_proposals_in_image = torch.cat((cx, cy, w, h, a), 1)
+                # rorated_proposals_in_image = box_ops.hbb2obb(proposals_in_image, version="oc")
+                rotated_match_quality_matrix = self.rotated_box_similarity(gt_oboxes_in_image, rotated_proposals_in_image)
+                
+                match_quality_matrix = rotated_match_quality_matrix
+                # assert horizontal_match_quality_matrix.size() == rotated_match_quality_matrix.size()
+                # match_quality_matrix = (horizontal_match_quality_matrix + rotated_match_quality_matrix) / 2
                 
                 matched_idxs_in_image = self.proposal_matcher(match_quality_matrix)
 
@@ -191,10 +200,8 @@ class RoIHeads(nn.Module):
         gt_oboxes = [t["oboxes"].to(dtype) for t in targets]
         gt_labels = [t["labels"] for t in targets]
 
-        # TODO : Is this justified ? 
-        # answer: https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
+        # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
         # append ground-truth bboxes to propos
-        # Seems redundant 
         # Use of horizontal proposals
         proposals = self.add_gt_proposals(proposals, gt_boxes)
         
@@ -246,12 +253,9 @@ class RoIHeads(nn.Module):
         num_classes = class_logits.shape[-1]
 
         boxes_per_image = [boxes_in_image.shape[0] for boxes_in_image in proposals]
-        
-        # print("box_regression", box_regression.shape)
-        # print("obox_regression", obox_regression.shape)
-        # print("proposal", proposals[0].shape)
-        pred_boxes = self.hbox_coder.decode(box_regression, proposals)
-        pred_oboxes = self.obox_coder.decode(obox_regression, proposals)
+
+        pred_boxes = self.hbox_coder.decode(box_regression.detach(), proposals)
+        pred_oboxes = self.obox_coder.decode(obox_regression.detach(), proposals)
         pred_scores = F.softmax(class_logits, -1)
 
 
@@ -269,32 +273,31 @@ class RoIHeads(nn.Module):
             # create labels for each prediction
             labels = torch.arange(num_classes, device=device)
             labels = labels.view(1, -1).expand_as(scores)
-
+            
             # remove predictions with the background label
             boxes = boxes[:, 1:]
             oboxes = oboxes[:, 1:]
             scores = scores[:, 1:]
             labels = labels[:, 1:]
 
+            
             # batch everything, by making every class prediction be a separate instance
             boxes = boxes.reshape(-1, 4)
             oboxes = oboxes.reshape(-1, 5)
             scores = scores.reshape(-1)
             labels = labels.reshape(-1)
-
             # remove low scoring boxes
             inds = torch.where(scores > self.score_thresh)[0]
-            boxes, oboxes, scores, labels = boxes[inds], oboxes[inds], scores[inds], labels[inds]
-
+            boxes, oboxes, scores, labels = boxes[inds, :], oboxes[inds, :], scores[inds], labels[inds]
             # remove empty boxes
             keep = box_ops.remove_small_boxes(boxes, min_size=1e-2)
-            boxes, oboxes, scores, labels = boxes[keep], oboxes[keep], scores[keep], labels[keep]
+            boxes, oboxes, scores, labels = boxes[keep, :], oboxes[keep, :], scores[keep], labels[keep]
 
             # non-maximum suppression, independently done per class
             keep = box_ops.batched_nms(boxes, scores, labels, self.nms_thresh)
             # keep only topk scoring predictions
             keep = keep[: self.detections_per_img]
-            boxes, oboxes, scores, labels = boxes[keep], oboxes[keep], scores[keep], labels[keep]
+            boxes, oboxes, scores, labels = boxes[keep, :], oboxes[keep, :], scores[keep], labels[keep]
 
             all_boxes.append(boxes)
             all_oboxes.append(oboxes)
@@ -327,18 +330,8 @@ class RoIHeads(nn.Module):
                 if not t["labels"].dtype == torch.int64:
                     raise TypeError(f"target labels must of int64 type, instead got {t['labels'].dtype}")
 
-        if self.training:
-            # TODO : Use different matchers for horizontal and rotated boxes
-            # rotated proposals are in rotated format (cx, cy, w, h, a), where a = 0, 
-            # as we use horizontal proposals from RPN
-            proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets = self.select_training_samples(proposals, targets)
-        
-        else:
-            labels = None
-            horizontal_regression_targets = None
-            rotated_regression_targets = None
-            matched_idxs = None
-        
+        proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets = self.select_training_samples(proposals, targets)
+
         # Horizontal ROI Pooling
         box_features = self.box_roi_pool(features, proposals, image_shapes)
         box_features = self.box_head(box_features)
@@ -353,11 +346,6 @@ class RoIHeads(nn.Module):
             if horizontal_regression_targets is None or rotated_regression_targets is None:
                 raise ValueError("regression_targets cannot be None")
             
-            loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(
-                class_logits, hbox_regression, obox_regression,
-                labels, horizontal_regression_targets, rotated_regression_targets
-            )
-            losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg, "loss_obox_reg": loss_obox_reg}
         else:
             boxes, oboxes, scores, labels = self.postprocess_detections(class_logits, hbox_regression, obox_regression, proposals, image_shapes)
             num_images = len(boxes)
@@ -370,11 +358,11 @@ class RoIHeads(nn.Module):
                         "scores": scores[i],
                     }
                 )
-            with torch.no_grad():
-                loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(
-                    class_logits, hbox_regression, obox_regression,
-                    labels, horizontal_regression_targets, rotated_regression_targets
-                )
-                losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg, "loss_obox_reg": loss_obox_reg}
+                
+        loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(
+            class_logits, hbox_regression, obox_regression,
+            labels, horizontal_regression_targets, rotated_regression_targets
+        )
+        losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg, "loss_obox_reg": loss_obox_reg}
 
         return result, losses

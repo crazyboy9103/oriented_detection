@@ -318,18 +318,17 @@ class RegionProposalNetwork(nn.Module):
 
         sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
 
-        objectness = objectness.flatten()
 
-        labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
-
         box_loss = F.smooth_l1_loss(
             pred_bbox_deltas[sampled_pos_inds],
             regression_targets[sampled_pos_inds],
             beta=1 / 9,
             reduction="sum",
         ) / (sampled_inds.numel())
-
+        
+        objectness = objectness.flatten()
+        labels = torch.cat(labels, dim=0)
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[sampled_inds], labels[sampled_inds])
 
         return objectness_loss, box_loss
@@ -374,16 +373,23 @@ class RegionProposalNetwork(nn.Module):
         boxes, scores = self.filter_proposals(proposals, objectness, images.image_sizes, num_anchors_per_level)
 
         losses = {}
-        if self.training:
-            if targets is None:
+        if targets is not None:
+            losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas)
+            
+        else:
+            if self.training:
                 raise ValueError("targets should not be None")
-            labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
-            regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
-            loss_objectness, loss_rpn_box_reg = self.compute_loss(
-                objectness, pred_bbox_deltas, labels, regression_targets
-            )
-            losses = {
-                "loss_objectness": loss_objectness,
-                "loss_rpn_box_reg": loss_rpn_box_reg,
-            }
+            
         return boxes, losses
+
+    def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas):
+        labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
+        regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
+        loss_objectness, loss_rpn_box_reg = self.compute_loss(
+            objectness, pred_bbox_deltas, labels, regression_targets
+        )
+        losses = {
+            "loss_objectness": loss_objectness,
+            "loss_rpn_box_reg": loss_rpn_box_reg,
+        }
+        return losses

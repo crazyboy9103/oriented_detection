@@ -9,7 +9,7 @@ from torchvision.io import read_image, ImageReadMode
 from tqdm import tqdm 
 
 from ops.boxes import poly2obb_np, poly2hbb_np
-
+from evaluation.evaluator import eval_rbbox_map
 # TODO: this consumes enormous amount of memory for datasets like DOTA with large number of instances,
 # need to find a way to reduce memory usage
 class BaseDataset(Dataset):
@@ -168,6 +168,50 @@ class BaseDataset(Dataset):
         image = read_image(ann['image_path'], ImageReadMode.RGB) / 255.0
         return image, ann
 
+    # Adapted from mmrotate/datasets/*.py
+    def evaluate(self,
+                 results,
+                 metric='mAP',
+                 iou_thr=0.5,
+                 scale_ranges=None,
+                 nproc=4):
+        """Evaluate the dataset.
+
+        Args:
+            results (list): Testing results of the dataset.
+            metric (str | list[str]): Metrics to be evaluated.
+            iou_thr (float | list[float]): IoU threshold. It must be a float
+                when evaluating mAP, and can be a list when evaluating recall.
+                Default: 0.5.
+            scale_ranges (list[tuple] | None): Scale ranges for evaluating mAP.
+                Default: None.
+            nproc (int): Processes used for computing TP and FP.
+                Default: 4.
+        """
+        nproc = min(nproc, os.cpu_count() // 2)
+        if not isinstance(metric, str):
+            assert len(metric) == 1
+            metric = metric[0]
+        allowed_metrics = ['mAP']
+        if metric not in allowed_metrics:
+            raise KeyError(f'metric {metric} is not supported')
+        annotations = [self.get_ann_info(i) for i in range(len(self))]
+        eval_results = {}
+        
+        if metric == 'mAP':
+            assert isinstance(iou_thr, float)
+            mean_ap, _ = eval_rbbox_map(
+                results,
+                annotations,
+                scale_ranges=scale_ranges,
+                iou_thr=iou_thr,
+                dataset=self.CLASSES,
+                nproc=nproc)
+            eval_results['mAP'] = mean_ap
+        else:
+            raise NotImplementedError
+
+        return eval_results
 
 def collate_fn(batch):
     return tuple(zip(*batch))
