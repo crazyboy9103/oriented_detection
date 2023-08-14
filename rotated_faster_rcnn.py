@@ -62,11 +62,11 @@ def plot_image(image, output, target):
     dt_oboxes = output['oboxes']
     dt_labels = output['labels']
     dt_scores = output['scores']
-    mask = dt_scores > 0.2
+    mask = dt_scores > 0.3
     
     dt_boxes = dt_boxes[mask].cpu().tolist()
     dt_oboxes = dt_oboxes[mask].cpu()
-    dt_opolys = obb2poly(dt_oboxes).tolist()
+    dt_opolys = obb2poly(dt_oboxes).to(int).tolist()
     dt_labels = dt_labels[mask].cpu().tolist()
     dt_scores = dt_scores[mask].cpu().tolist()
     
@@ -80,9 +80,9 @@ def plot_image(image, output, target):
     for dt_box, dt_opoly, dt_label, dt_score in zip(dt_boxes, dt_opolys, dt_labels, dt_scores):
         color = MVTecDataset.get_palette(dt_label)
         dt_label = MVTecDataset.idx_to_class(dt_label)
-        draw.rectangle(dt_box, outline=color, width=3)
-        draw.polygon(dt_opoly, outline=color, width=3)
-        draw.text(dt_box[:2], f'{dt_label} {dt_score:.2f}%', fill=color)
+        draw.rectangle(dt_box, outline=color, width=5)
+        draw.polygon(dt_opoly, outline=color, width=5)
+        draw.text(dt_box[:2], f'{dt_label} {dt_score:.2f}', fill=color)
     
     # gts
     for gt_box, gt_opoly, gt_label in zip(gt_boxes, gt_opolys, gt_labels):
@@ -128,13 +128,13 @@ class RotatedFasterRCNN(LightningModule):
         self.outputs.append(outputs)
         
         for image, image_path in (plot_image(image, output, target) for image, output, target in zip(images, outputs, targets)):
-            self.logger.experiment.log_image(image, name=image_path)
+            self.logger.experiment.log_image(image, name=image_path.split('/')[-1])
         return loss_dict    
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
-        return optimizer
-        # scheduler = CosineAnnealingWarmUpRestartsDecay(optimizer, T_0=50, T_mult=1, eta_max=0.1,  T_up=10, gamma=0.5)
+        # return optimizer
+        # scheduler = CosineAnnealingWarmUpRestartsDecay(optimizer, T_0=50, T_mult=1, eta_max=0.001,  T_up=10, gamma=0.9)
         # return [optimizer], [scheduler]
-
+        return [optimizer], []
 

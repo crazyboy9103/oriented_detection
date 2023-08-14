@@ -45,7 +45,7 @@ class BaseDataset(Dataset):
     @classmethod
     def get_palette(cls, value):
         if isinstance(value, str):
-            value = cls.class_to_idx(value) + 1
+            value = cls.class_to_idx(value)
         return cls.PALETTE[value - 1]
     
     def prepare_data(self, save_dir, data_path):

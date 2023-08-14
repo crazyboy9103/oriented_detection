@@ -1,4 +1,3 @@
-import os 
 import argparse
 
 import pytorch_lightning as pl
@@ -52,7 +51,7 @@ def main(args):
     trainer = pl.Trainer(
         logger=comet_logger, 
         max_epochs=args.num_epochs,
-        # gradient_clip_val=args.gradient_clip_val, 
+        gradient_clip_val=args.gradient_clip_val, 
         precision=args.precision,
         benchmark=False,
         deterministic=False,

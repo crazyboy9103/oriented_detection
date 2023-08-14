@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torchvision
 from torch import nn, Tensor
+from torchvision import transforms as T
 from torchvision.models.detection.image_list import ImageList
 
 @torch.jit.unused
@@ -201,7 +202,9 @@ class GeneralizedRCNNTransform(nn.Module):
                     data[k] = v
                 targets_copy.append(data)
             targets = targets_copy
-            
+        
+        image_transform = None
+        # image_transform = self.get_image_transform(self.training)
         for i, image in enumerate(images):
             target_index = targets[i] if targets is not None else None
 
@@ -211,7 +214,10 @@ class GeneralizedRCNNTransform(nn.Module):
             image = self.normalize(image)
             image, target_index = self.resize(image, target_index)
             
-            image, target_index = self.flip_bboxes(image, target_index)
+            if image_transform:
+                image, target_index = self.flip_bboxes(image, target_index)
+                image = image_transform(image)
+            
             images[i] = image
             if targets is not None and target_index is not None:
                 targets[i] = target_index
@@ -358,7 +364,21 @@ class GeneralizedRCNNTransform(nn.Module):
             result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
             
         return result
-
+    
+    @staticmethod
+    def get_image_transform(train: bool) -> T.Compose:
+        return T.Compose([
+            T.ColorJitter(
+                brightness=0.5,
+                contrast=0.5,
+                saturation=0.5,
+                hue=0.5,
+            ),
+            T.GaussianBlur(3, sigma=(0.1, 2.0)),
+            T.RandomGrayscale(p=0.2),
+            T.RandomErasing(p=0.2, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False),
+        ]) if train else None
+        
     def __repr__(self) -> str:
         format_string = f"{self.__class__.__name__}("
         _indent = "\n    "
@@ -366,4 +386,5 @@ class GeneralizedRCNNTransform(nn.Module):
         format_string += f"{_indent}Resize(min_size={self.min_size}, max_size={self.max_size}, mode='bilinear')"
         format_string += "\n)"
         return format_string
+
 

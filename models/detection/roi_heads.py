@@ -99,7 +99,8 @@ class RoIHeads(nn.Module):
         self.proposal_matcher = det_utils.Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=False)
 
         self.fg_bg_sampler = det_utils.BalancedPositiveNegativeSampler(batch_size_per_image, positive_fraction)
-
+        self.batch_size_per_image = batch_size_per_image
+        
         if bbox_reg_weights is None:
             bbox_reg_weights = (1, 1, 1, 1, 1)
         
@@ -359,10 +360,16 @@ class RoIHeads(nn.Module):
                     }
                 )
                 
+        # normalizer = self.batch_size_per_image * len(features)   
+        
         loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(
             class_logits, hbox_regression, obox_regression,
             labels, horizontal_regression_targets, rotated_regression_targets
         )
-        losses = {"loss_classifier": loss_classifier, "loss_box_reg": loss_box_reg, "loss_obox_reg": loss_obox_reg}
+        losses = {
+            "loss_classifier": loss_classifier, 
+            "loss_box_reg": loss_box_reg, 
+            "loss_obox_reg": loss_obox_reg
+        }
 
         return result, losses

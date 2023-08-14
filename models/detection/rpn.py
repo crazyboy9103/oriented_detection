@@ -172,8 +172,9 @@ class RegionProposalNetwork(nn.Module):
             bg_iou_thresh,
             allow_low_quality_matches=True,
         )
-
+        
         self.fg_bg_sampler = det_utils.BalancedPositiveNegativeSampler(batch_size_per_image, positive_fraction)
+        self.batch_size_per_image = batch_size_per_image
         # used during testing
         self._pre_nms_top_n = pre_nms_top_n
         self._post_nms_top_n = post_nms_top_n
@@ -374,7 +375,8 @@ class RegionProposalNetwork(nn.Module):
 
         losses = {}
         if targets is not None:
-            losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas)
+            num_images = len(images.image_sizes)
+            losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas, num_images)
             
         else:
             if self.training:
@@ -382,12 +384,13 @@ class RegionProposalNetwork(nn.Module):
             
         return boxes, losses
 
-    def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas):
+    def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas, num_images):
         labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
         regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
         loss_objectness, loss_rpn_box_reg = self.compute_loss(
             objectness, pred_bbox_deltas, labels, regression_targets
         )
+        # normalizer = self.batch_size_per_image * num_images
         losses = {
             "loss_objectness": loss_objectness,
             "loss_rpn_box_reg": loss_rpn_box_reg,
