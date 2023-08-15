@@ -4,6 +4,7 @@ import warnings
 
 import torch
 import torch.nn as nn
+from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops import MultiScaleRoIAlign
 from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
 from torchvision.models.detection.faster_rcnn import TwoMLPHead, FastRCNNConvFCHead
@@ -31,7 +32,7 @@ from .transform import GeneralizedRCNNTransform
 
 def _default_anchor_generator():
     # sizes = scale x stride
-    sizes = ((16, 64, 256),) * 5
+    sizes = ((32,), (64,), (128,), (256,), (512,),)
     ratios = ((0.5, 1.0, 2.0),) * 5
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 
@@ -172,6 +173,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
             box_score_thresh,
             box_nms_thresh,
             box_detections_per_img,
+            nms_thresh_rotated = 0.1
         )
                 
         super(RotatedFasterRCNN, self).__init__(backbone, rpn, roi_heads, transform)
@@ -272,15 +274,17 @@ def rotated_fasterrcnn_resnet50_fpn_v2(
     
     
     is_trained = weights is not None or weights_backbone is not None
+    norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_trained else nn.BatchNorm2d
+    
     trainable_backbone_layers = _validate_trainable_layers(is_trained, trainable_backbone_layers, max_value=5, default_value=3)
 
     backbone = resnet50(weights=weights_backbone, progress=progress)
-    backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, [1, 2, 3, 4], norm_layer=nn.BatchNorm2d)
+    backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, [1, 2, 3, 4], norm_layer=norm_layer)
     
     rpn_anchor_generator = _default_anchor_generator()
-    rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=1)
+    rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)
     box_head = FastRCNNConvFCHead(
-        (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=nn.BatchNorm2d
+        (backbone.out_channels, 7, 7), [256, 256], [1024], norm_layer=norm_layer
     )
     
     model = RotatedFasterRCNN(
@@ -295,6 +299,4 @@ def rotated_fasterrcnn_resnet50_fpn_v2(
     if weights and num_classes is None:
         model.load_state_dict(weights.get_state_dict(progress=progress), strict=False)
 
-    return model 
-        
-    
+    return model

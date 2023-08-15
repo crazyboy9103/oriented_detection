@@ -2,6 +2,7 @@ from typing import List, Tuple
 from abc import ABCMeta, abstractmethod
 import math
 
+import numpy as np
 import torch
 from torch import Tensor 
 
@@ -145,10 +146,18 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     gt_heights = gt_bboxes[:, 3].unsqueeze(1)
     gt_angles = gt_bboxes[:, 4].unsqueeze(1)
 
+    dtheta1 = gt_angles
+    dtheta2 = gt_angles + np.pi / 2
+    abs_dtheta1 = torch.abs(dtheta1)
+    abs_dtheta2 = torch.abs(dtheta2)
+    gw_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_widths, gt_heights)
+    gh_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_heights, gt_widths)
+    gt_angles = torch.where(abs_dtheta1 < abs_dtheta2, dtheta1, dtheta2)
+        
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
     targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
-    targets_dw = ww * torch.log(gt_widths / ex_widths)
-    targets_dh = wh * torch.log(gt_heights / ex_heights)
+    targets_dw = ww * torch.log(gw_regular / ex_widths)
+    targets_dh = wh * torch.log(gh_regular / ex_heights)
     targets_da = wa * gt_angles
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh, targets_da), dim=1)
     return targets
@@ -179,6 +188,7 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
     pred_w = torch.exp(dw) * widths[:, None]
     pred_h = torch.exp(dh) * heights[:, None]
+    pred_a = da 
     
     # Distance from center to box's corner.
     # c_to_c_h = torch.tensor(0.5, dtype=pred_ctr_y.dtype, device=pred_h.device) * pred_h
@@ -188,9 +198,14 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     # pred_boxes2 = pred_ctr_y - c_to_c_h
     # pred_boxes3 = pred_ctr_x + c_to_c_w
     # pred_boxes4 = pred_ctr_y + c_to_c_h
-    pred_a = da 
-    pred_boxes = torch.stack((pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a), dim=1).flatten(1)
-    return pred_boxes
+    
+    # pred_boxes = torch.stack((pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a), dim=2).flatten(1)
+    # return pred_boxes
+
+    w_regular = torch.where(pred_w > pred_h, pred_w, pred_h)
+    h_regular = torch.where(pred_w > pred_h, pred_h, pred_w)
+    theta_regular = torch.where(pred_w > pred_h, pred_a, pred_a + np.pi / 2)
+    return torch.stack([pred_ctr_x, pred_ctr_y, w_regular, h_regular, theta_regular],dim=2).flatten(1)
 
 class HBoxCoder(BaseBoxCoder):
     def __init__(self, weights: Tuple[float, float, float, float, float], bbox_xform_clip: float = math.log(1000.0 / 16)):

@@ -12,3 +12,4 @@ detectron2.egg-info/
 
 *.yaml
 *.csv
+*.json

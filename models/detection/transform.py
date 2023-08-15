@@ -360,8 +360,11 @@ class GeneralizedRCNNTransform(nn.Module):
         if self.training:
             return result
         for i, (pred, im_s, o_im_s) in enumerate(zip(result, image_shapes, original_image_sizes)):
-            result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
-            result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
+            if "bboxes" in pred:
+                result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
+            
+            if "oboxes" in pred:
+                result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
             
         return result
     
