@@ -255,9 +255,10 @@ def hbb2obb(hbboxes, version='oc'):
     Returns:
         obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
     """
+    is_list = False
     if isinstance(hbboxes, list):
-        hbboxes = torch.stack(hbboxes)
-        
+        hbboxes = torch.stack(hbboxes, dim=0)
+        is_list = True
     if version == 'oc':
         results = hbb2obb_oc(hbboxes)
     elif version == 'le135':
@@ -266,7 +267,7 @@ def hbb2obb(hbboxes, version='oc'):
         results = hbb2obb_le90(hbboxes)
     else:
         raise NotImplementedError
-    return results
+    return torch.split(results, len(results), dim=0) if is_list else results 
 
 
 def poly2obb_oc(polys):

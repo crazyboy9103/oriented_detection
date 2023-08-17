@@ -1,5 +1,7 @@
 __pycache__/
 
+wandb/
+
 build/
 detectron2.egg-info/ 
 
@@ -13,3 +15,6 @@ detectron2.egg-info/
 *.yaml
 *.csv
 *.json
+*.log
+*.txt
+!requirements.txt

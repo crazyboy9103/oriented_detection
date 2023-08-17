@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch import Tensor 
 
-from ops.boxes import hbb2obb 
+from ops import boxes as box_ops 
 
 class BaseBoxCoder(metaclass=ABCMeta):
     """
@@ -124,55 +124,61 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     wh = weights[3]
     wa = weights[4]
     
-    # bboxes = hbb2obb(bboxes, version='oc')
-    # ex_ctr_x = bboxes[:, 0].unsqueeze(1)
-    # ex_ctr_y = bboxes[:, 1].unsqueeze(1)
-    # ex_widths = bboxes[:, 2].unsqueeze(1)
-    # ex_heights = bboxes[:, 3].unsqueeze(1)
-    # ex_angles = bboxes[:, 4].unsqueeze(1)
-    bboxes_x1 = bboxes[:, 0].unsqueeze(1)
-    bboxes_y1 = bboxes[:, 1].unsqueeze(1)
-    bboxes_x2 = bboxes[:, 2].unsqueeze(1)
-    bboxes_y2 = bboxes[:, 3].unsqueeze(1)
-
-    ex_widths = bboxes_x2 - bboxes_x1
-    ex_heights = bboxes_y2 - bboxes_y1
-    ex_ctr_x = bboxes_x1 + 0.5 * ex_widths
-    ex_ctr_y = bboxes_y1 + 0.5 * ex_heights
+    bboxes = box_ops.hbb2obb(bboxes, version='oc')
+    ex_ctr_x =   bboxes[:, 0]# .unsqueeze(1)
+    ex_ctr_y =   bboxes[:, 1]# .unsqueeze(1)
+    ex_widths =  bboxes[:, 2]# .unsqueeze(1)
+    ex_heights = bboxes[:, 3]# .unsqueeze(1)
+    ex_angles =  bboxes[:, 4]# .unsqueeze(1)
+    # bboxes_x1 = bboxes[:, 0].unsqueeze(1)
+    # bboxes_y1 = bboxes[:, 1].unsqueeze(1)
+    # bboxes_x2 = bboxes[:, 2].unsqueeze(1)
+    # bboxes_y2 = bboxes[:, 3].unsqueeze(1)
+    # ex_widths = bboxes_x2 - bboxes_x1
+    # ex_heights = bboxes_y2 - bboxes_y1
+    # ex_ctr_x = bboxes_x1 + 0.5 * ex_widths
+    # ex_ctr_y = bboxes_y1 + 0.5 * ex_heights
     
-    gt_ctr_x = gt_bboxes[:, 0].unsqueeze(1)
-    gt_ctr_y = gt_bboxes[:, 1].unsqueeze(1)
-    gt_widths = gt_bboxes[:, 2].unsqueeze(1)
-    gt_heights = gt_bboxes[:, 3].unsqueeze(1)
-    gt_angles = gt_bboxes[:, 4].unsqueeze(1)
+    gt_ctr_x =   gt_bboxes[:, 0]#.unsqueeze(1)
+    gt_ctr_y =   gt_bboxes[:, 1]#.unsqueeze(1)
+    gt_widths =  gt_bboxes[:, 2]#.unsqueeze(1)
+    gt_heights = gt_bboxes[:, 3]#.unsqueeze(1)
+    gt_angles =  gt_bboxes[:, 4]#.unsqueeze(1)
 
-    dtheta1 = gt_angles
-    dtheta2 = gt_angles + np.pi / 2
-    abs_dtheta1 = torch.abs(dtheta1)
-    abs_dtheta2 = torch.abs(dtheta2)
-    gw_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_widths, gt_heights)
-    gh_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_heights, gt_widths)
-    gt_angles = torch.where(abs_dtheta1 < abs_dtheta2, dtheta1, dtheta2)
+    # dtheta1 = gt_angles
+    # dtheta2 = gt_angles + np.pi / 2
+    # abs_dtheta1 = torch.abs(dtheta1)
+    # abs_dtheta2 = torch.abs(dtheta2)
+    # gw_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_widths, gt_heights)
+    # gh_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_heights, gt_widths)
+    # gt_angles = torch.where(abs_dtheta1 < abs_dtheta2, dtheta1, dtheta2)
         
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
     targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
-    targets_dw = ww * torch.log(gw_regular / ex_widths)
-    targets_dh = wh * torch.log(gh_regular / ex_heights)
-    targets_da = wa * gt_angles
+    targets_dw = ww * torch.log(gt_widths / ex_widths)
+    targets_dh = wh * torch.log(gt_heights / ex_heights)
+    targets_da = wa * (gt_angles)
+    
+    targets_dx.unsqueeze_(1)
+    targets_dy.unsqueeze_(1)
+    targets_dw.unsqueeze_(1)
+    targets_dh.unsqueeze_(1)
+    targets_da.unsqueeze_(1)
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh, targets_da), dim=1)
     return targets
 
 @torch.jit._script_if_tracing
 def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
-    widths = bboxes[:, 2] - bboxes[:, 0]
-    heights = bboxes[:, 3] - bboxes[:, 1]
-    ctr_x = bboxes[:, 0] + 0.5 * widths
-    ctr_y = bboxes[:, 1] + 0.5 * heights
-    # bboxes = hbb2obb(bboxes, version='oc')
-    # ctr_x = bboxes[:, 0]
-    # ctr_y = bboxes[:, 1]
-    # widths = bboxes[:, 2]
-    # heights = bboxes[:, 3]
+    # widths = bboxes[:, 2] - bboxes[:, 0]
+    # heights = bboxes[:, 3] - bboxes[:, 1]
+    # ctr_x = bboxes[:, 0] + 0.5 * widths
+    # ctr_y = bboxes[:, 1] + 0.5 * heights
+    bboxes = box_ops.hbb2obb(bboxes, version='oc')
+    ctr_x = bboxes[:, 0]
+    ctr_y = bboxes[:, 1]
+    widths = bboxes[:, 2]
+    heights = bboxes[:, 3]
+    angles = bboxes[:, 4]
     
     wx, wy, ww, wh, wa = weights
     dx = pred_bboxes[:, 0::5] / wx
@@ -188,7 +194,7 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
     pred_w = torch.exp(dw) * widths[:, None]
     pred_h = torch.exp(dh) * heights[:, None]
-    pred_a = da 
+    pred_a = da
     
     # Distance from center to box's corner.
     # c_to_c_h = torch.tensor(0.5, dtype=pred_ctr_y.dtype, device=pred_h.device) * pred_h
@@ -202,10 +208,11 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     # pred_boxes = torch.stack((pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a), dim=2).flatten(1)
     # return pred_boxes
 
-    w_regular = torch.where(pred_w > pred_h, pred_w, pred_h)
-    h_regular = torch.where(pred_w > pred_h, pred_h, pred_w)
-    theta_regular = torch.where(pred_w > pred_h, pred_a, pred_a + np.pi / 2)
-    return torch.stack([pred_ctr_x, pred_ctr_y, w_regular, h_regular, theta_regular],dim=2).flatten(1)
+    # w_regular = torch.where(pred_w > pred_h, pred_w, pred_h)
+    # h_regular = torch.where(pred_w > pred_h, pred_h, pred_w)
+    # theta_regular = torch.where(pred_w > pred_h, pred_a, pred_a + np.pi / 2)
+    pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
+    return pred_boxes
 
 class HBoxCoder(BaseBoxCoder):
     def __init__(self, weights: Tuple[float, float, float, float, float], bbox_xform_clip: float = math.log(1000.0 / 16)):

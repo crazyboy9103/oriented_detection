@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from typing import Optional, Tuple
 
 import wandb
+import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import StepLR
 from pytorch_lightning import LightningModule
@@ -15,18 +16,17 @@ from scheduler import CosineAnnealingWarmUpRestartsDecay
 from ops.boxes import obb2poly
 from datasets.mvtec import MVTecDataset
 from datasets.dota import DotaDataset
+from evaluation.evaluator import eval_rbbox_map
 
-font = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans.ttf')
-font = ImageFont.truetype(font, size=8)
-anchor_type = 'lt'
+FONT = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans.ttf')
+FONT = ImageFont.truetype(FONT, size=8)
+ANCHOR_TYPE = 'lt'
 
 # TODO add more args
 
 
 @dataclass
 class MvtecDataConfig:
-    # image_mean: Tuple[float, float, float] = (211.35, 166.559, 97.271)
-    # image_std: Tuple[float, float, float] = (43.849, 40.172, 30.459)
     image_mean: Tuple[float, float, float] = (
         211.35 / 255, 166.559 / 255, 97.271 / 255)
     image_std: Tuple[float, float, float] = (
@@ -68,13 +68,12 @@ class RotatedFasterRCNNConfig:
     box_bg_iou_thresh: float = 0.5
     box_batch_size_per_image: int = 512
     box_positive_fraction: float = 0.5
-    bbox_reg_weights: Optional[Tuple[float, float,
-                                     float, float, float]] = (10, 10, 5, 5, 10)
+    bbox_reg_weights: Optional[Tuple[float, float, float, float, float]] = (1, 1, 1, 1, 1)
 
 
 def get_xy_bounds_text(draw, top_left, text, padding=5):
     x1, y1, x2, y2 = draw.textbbox(
-        xy=top_left, text=text, font=font, anchor=anchor_type)
+        xy=top_left, text=text, font=FONT, anchor=ANCHOR_TYPE)
     return x1, y1, x2 + padding, y2 + padding
 
 
@@ -99,7 +98,7 @@ def plot_image(image, output, target):
             rectangle = get_xy_bounds_text(draw, dt_hbox[:2], text_to_draw)
             draw.rectangle(rectangle, fill=color)
             draw.text(rectangle[:2], text_to_draw,
-                      fill="white", font=font, anchor=anchor_type)
+                      fill="white", font=FONT, anchor=ANCHOR_TYPE)
 
     elif 'oboxes' in output:
         dt_oboxes = output['oboxes']
@@ -120,7 +119,7 @@ def plot_image(image, output, target):
             rectangle = get_xy_bounds_text(draw, dt_opoly[:2], text_to_draw)
             draw.rectangle(rectangle, fill=color)
             draw.text(rectangle[:2], text_to_draw,
-                      fill="white", font=font, anchor=anchor_type)
+                      fill="white", font=FONT, anchor=ANCHOR_TYPE)
 
     gt_boxes = target['bboxes'].cpu().tolist()
     gt_opolys = target['polygons'].cpu().tolist()
@@ -138,7 +137,7 @@ def plot_image(image, output, target):
         rectangle = get_xy_bounds_text(draw, gt_box[:2], text_to_draw)
         draw.rectangle(rectangle, fill=color)
         draw.text(rectangle[:2], text_to_draw,
-                  fill="white", font=font, anchor=anchor_type)
+                  fill="white", font=FONT, anchor=ANCHOR_TYPE)
 
     return image, target["image_path"]
 
@@ -153,7 +152,27 @@ class RotatedFasterRCNN(LightningModule):
         self.lr = lr
 
         self.outputs = []
+        self.targets = []
 
+    def put_outputs(self, outputs):
+        # [[cls 1, cls 2 ... cls 13], [(img2)...]]
+        for output in outputs:
+            per_class_outputs = [[] for _ in range(self.train_config.num_classes - 1)]
+            oboxes = output["oboxes"]
+            oscores = output["oscores"]
+            oboxes_with_scores = torch.cat([oboxes, oscores.unsqueeze(-1)], dim=-1)
+            for obox, olabel in zip(oboxes_with_scores, output["olabels"]):
+                per_class_outputs[olabel-1].append(obox)
+                
+            self.outputs.append(per_class_outputs)
+        
+    def put_targets(self, targets):
+        for target in targets:
+            target_copy = {}
+            target_copy["oboxes"] = target["oboxes"]
+            target_copy["labels"] = target["labels"]
+            self.targets.append(target_copy)
+        
     def forward(self, images, targets=None):
         return self.model(images, targets)
 
@@ -182,8 +201,22 @@ class RotatedFasterRCNN(LightningModule):
             "images": [wandb.Image(image, caption=image_path.split('/')[-1])
                        for image, image_path in (plot_image(image, output, target) for image, output, target in zip(images, outputs, targets))]
         })
+        
+        self.put_outputs(outputs)
+        self.put_targets(targets)
         return loss_dict
 
+    def on_validation_epoch_end(self):
+        map, _ = eval_rbbox_map(
+            self.outputs,
+            self.targets, 
+            None,
+            0.5,
+            True
+        )
+        print(map)
+        
+        
     def configure_optimizers(self):
         # optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
         optimizer = optim.SGD(self.parameters(), lr=self.lr,

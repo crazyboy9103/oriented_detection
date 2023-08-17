@@ -56,7 +56,9 @@ def main(args):
         )
     else:
         logger = None  
-        
+    
+    logger.watch(model, log='gradients', log_freq=100)
+    
     trainer = pl.Trainer(
         logger=logger, 
         max_epochs=args.num_epochs,
@@ -64,9 +66,11 @@ def main(args):
         precision=args.precision,
         benchmark=False,
         deterministic=False,
-        profiler="pytorch"
+        profiler="pytorch",
+        # fast_dev_run=True,
+        accelerator="cpu",
+        # detect_anomaly=True
     )
-    logger.watch(model, log='gradients', log_freq=100)
     trainer.fit(
         model, 
         datamodule=datamodule,

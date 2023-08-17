@@ -56,7 +56,6 @@ def average_precision(recalls, precisions, mode='area'):
 
 def tpfp_default(det_bboxes,
                  gt_bboxes,
-                 gt_bboxes_ignore=None,
                  iou_thr=0.5,
                  area_ranges=None):
     """Check if detected bboxes are true positive or false positive.
@@ -64,8 +63,6 @@ def tpfp_default(det_bboxes,
     Args:
         det_bboxes (ndarray): Detected bboxes of this image, of shape (m, 6).
         gt_bboxes (ndarray): GT bboxes of this image, of shape (n, 5).
-        gt_bboxes_ignore (ndarray): Ignored gt bboxes of this image,
-            of shape (k, 5). Default: None
         iou_thr (float): IoU threshold to be considered as matched.
             Default: 0.5.
         area_ranges (list[tuple] | None): Range of bbox areas to be evaluated,
@@ -75,14 +72,9 @@ def tpfp_default(det_bboxes,
         tuple[np.ndarray]: (tp, fp) whose elements are 0 and 1. The shape of
             each array is (num_scales, m).
     """
-    # an indicator of ignored gts
     det_bboxes = np.array(det_bboxes)
-    gt_ignore_inds = np.concatenate(
-        (np.zeros(gt_bboxes.shape[0], dtype=bool), 
-         np.ones(gt_bboxes_ignore.shape[0], dtype=bool)))
-    # stack gt_bboxes and gt_bboxes_ignore for convenience
-    gt_bboxes = np.vstack((gt_bboxes, gt_bboxes_ignore))
-
+    print("det_bboxes", det_bboxes.shape)
+    print("gt_bboxes", gt_bboxes.shape)
     num_dets = det_bboxes.shape[0]
     num_gts = gt_bboxes.shape[0]
     if area_ranges is None:
@@ -97,15 +89,19 @@ def tpfp_default(det_bboxes,
     gt_angles_to_return = np.zeros((num_scales, num_dets), dtype=np.float32)
     # if there is no gt bboxes in this image, then all det bboxes
     # within area range are false positives
-    if gt_bboxes.shape[0] == 0:
+    if num_gts == 0:
         if area_ranges == [(None, None)]:
             fp[...] = 1
         else:
             raise NotImplementedError
         return tp, fp, ious_to_return, det_angles_to_return, gt_angles_to_return
 
+    if num_dets == 0:
+        return tp, fp, ious_to_return, det_angles_to_return, gt_angles_to_return
+        
+    
     ious = box_iou_rotated(
-        torch.from_numpy(det_bboxes).float(),
+        torch.from_numpy(det_bboxes[:, :5]).float(),
         torch.from_numpy(gt_bboxes).float()
     ).numpy()
 
@@ -120,34 +116,26 @@ def tpfp_default(det_bboxes,
     sort_inds = np.argsort(-det_bboxes[:, -1])
     for k, (min_area, max_area) in enumerate(area_ranges):
         gt_covered = np.zeros(num_gts, dtype=bool)
-        # if no area range is specified, gt_area_ignore is all False
-        if min_area is None:
-            gt_area_ignore = np.zeros_like(gt_ignore_inds, dtype=bool)
-        else:
-            raise NotImplementedError
         for i in sort_inds:
             if ious_max[i] >= iou_thr:
                 matched_gt = ious_argmax[i]
-                if not (gt_ignore_inds[matched_gt]
-                        or gt_area_ignore[matched_gt]):
+                ious_to_return[k, i] = ious_max[i]
+                det_angles_to_return[k, i] = det_angles[i]
+                gt_angles_to_return[k, i] = gt_angles[matched_gt]
+                
+                if not gt_covered[matched_gt]:
+                    gt_covered[matched_gt] = True
+                    tp[k, i] = 1
                     
-                    ious_to_return[k, i] = ious_max[i]
-                    det_angles_to_return[k, i] = det_angles[i]
-                    gt_angles_to_return[k, i] = gt_angles[matched_gt]
+                else:
+                    fp[k, i] = 1
                     
-                    if not gt_covered[matched_gt]:
-                        gt_covered[matched_gt] = True
-                        tp[k, i] = 1
-                        
-                    else:
-                        fp[k, i] = 1
-                # otherwise ignore this detected bbox, tp = 0, fp = 0
             elif min_area is None:
                 fp[k, i] = 1
                 ious_to_return[k, i] = ious_max[i]
+                
             else:
-                bbox = det_bboxes[i, :5]
-                area = bbox[2] * bbox[3]
+                area = det_bboxes[i][2] * det_bboxes[i][3]
                 if area >= min_area and area < max_area:
                     fp[k, i] = 1
                     ious_to_return[k, i] = ious_max[i]
@@ -163,28 +151,18 @@ def get_cls_results(det_results, annotations, class_id):
         class_id (int): ID of a specific class.
 
     Returns:
-        tuple[list[np.ndarray]]: detected bboxes, gt bboxes, ignored gt bboxes
+        tuple[list[np.ndarray]]: detected bboxes, gt bboxes
     """
     cls_dets = [img_res[class_id] for img_res in det_results]
-
+    cls_dets = list(filter(lambda x: len(x), cls_dets))
+    
     cls_gts = []
-    cls_gts_ignore = []
     for ann in annotations:
-        gt_inds = np.array(ann['labels']) == class_id
-        try:
-            cls_gts.append(np.array(ann['oboxes'])[gt_inds, :]) 
-        except:
-            cls_gts.append(np.array(ann['oboxes'])[gt_inds])
-        if ann.get('labels_ignore', None) is not None:
-            ignore_inds = np.array(ann['labels_ignore']) == class_id
-            try:
-                cls_gts_ignore.append(np.array(ann['bboxes_ignore'])[ignore_inds, :])
-            except:
-                cls_gts_ignore.append(np.array(ann['bboxes_ignore'])[ignore_inds])
-        else:
-            cls_gts_ignore.append(torch.zeros((0, 5), dtype=torch.float64))
+        gt_inds = np.array(ann['labels']) == class_id + 1
+        cls_gts.append(np.array(ann['oboxes'])[gt_inds, :]) 
 
-    return cls_dets, cls_gts, cls_gts_ignore
+
+    return cls_dets, cls_gts
 
 
 def eval_rbbox_map(det_results,
@@ -203,11 +181,8 @@ def eval_rbbox_map(det_results,
             per-class detected bboxes.
         annotations (list[dict]): Ground truth annotations where each item of
             the list indicates an image. Keys of annotations are:
-
-            - `bboxes`: numpy array of shape (n, 5)
+            - `oboxes`: numpy array of shape (n, 5)
             - `labels`: numpy array of shape (n, )
-            - `bboxes_ignore` (optional): numpy array of shape (k, 5)
-            - `labels_ignore` (optional): numpy array of shape (k, )
         scale_ranges (list[tuple] | None): Range of scales to be evaluated,
             in the format [(min1, max1), (min2, max2), ...]. A range of
             (32, 64) means the area range between (32**2, 64**2).
@@ -237,21 +212,20 @@ def eval_rbbox_map(det_results,
 
     pool = get_context('spawn').Pool(nproc)
     eval_results = []
-    for i in range(num_classes):
+    for class_idx in range(num_classes):
         # get gt and det bboxes of this class
-        cls_dets, cls_gts, cls_gts_ignore = get_cls_results(
-            det_results, annotations, i)
-
+        cls_dets, cls_gts = get_cls_results(det_results, annotations, class_idx)
+        if not cls_dets or not cls_gts:
+            continue
         # compute tp and fp for each image with multiple processes
         data = pool.starmap(
             tpfp_default,
-            zip(cls_dets, cls_gts, cls_gts_ignore,
+            zip(cls_dets, cls_gts,
                 [iou_thr for _ in range(num_imgs)],
                 [area_ranges for _ in range(num_imgs)]))
         
         tp, fp, ious, det_angles, gt_angles = tuple(zip(*data))
         # calculate gt number of each scale
-        # ignored gts or gts beyond the specific scale are not counted
         num_gts = np.zeros(num_scales, dtype=int)
         for _, bbox in enumerate(cls_gts):
             if area_ranges is None:
@@ -264,7 +238,19 @@ def eval_rbbox_map(det_results,
         # sort all det bboxes by score, also sort tp and fp
         cls_dets = np.vstack(cls_dets)
         num_dets = cls_dets.shape[0]
-        sort_inds = np.argsort(-cls_dets[:, -1])
+        try:
+            sort_inds = np.argsort(-cls_dets[:, -1])
+        except:
+            eval_results.append({
+                'num_gts': 0,
+                'num_dets': 0,
+                'recall': 0,
+                'precision': 0,
+                'ap': 0,
+                'miou': 0, 
+                'mod_miou': 0
+            })
+            continue
         tp = np.hstack(tp)[:, sort_inds]
         fp = np.hstack(fp)[:, sort_inds]
         ious = np.hstack(ious)[:, sort_inds]
@@ -279,8 +265,8 @@ def eval_rbbox_map(det_results,
         nonzero_gt_angles = gt_angles[ious != 0].copy()
         
         abs_diff_angle = np.abs(nonzero_det_angles - nonzero_gt_angles)
+        # 𝑑(𝐼𝑜𝑈,𝜃_𝑔𝑡, 𝜃_𝑑𝑡)=𝐼𝑜𝑈/(1+ln(|𝜃_𝑔𝑡−𝜃_𝑑𝑡 |+1))
         modulated_ious = nonzero_ious / (1 + np.log(abs_diff_angle+1))
-        # 𝑑(𝐼𝑜𝑈,𝜃_𝑔𝑡, 𝜃_𝑑𝑡)=𝐼𝑜𝑈/(1+log(|𝜃_𝑔𝑡−𝜃_𝑑𝑡 |+1))
         # calculate recall and precision with tp and fp
         tp = np.cumsum(tp, axis=1)
         fp = np.cumsum(fp, axis=1)
