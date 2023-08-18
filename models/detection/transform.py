@@ -203,24 +203,23 @@ class GeneralizedRCNNTransform(nn.Module):
                 targets_copy.append(data)
             targets = targets_copy
         
-        image_transform = None
-        # image_transform = self.get_image_transform(self.training)
+        image_transform = self.get_image_transform(self.training)
         for i, image in enumerate(images):
-            target_index = targets[i] if targets is not None else None
+            target = targets[i] if targets is not None else None
 
             if image.dim() != 3:
                 raise ValueError(f"images is expected to be a list of 3d tensors of shape [C, H, W], got {image.shape}")
             
             image = self.normalize(image)
-            image, target_index = self.resize(image, target_index)
+            image, target = self.resize(image, target)
+            image, target = self.flip_bboxes(image, target)
             
             if image_transform:
-                image, target_index = self.flip_bboxes(image, target_index)
                 image = image_transform(image)
             
             images[i] = image
-            if targets is not None and target_index is not None:
-                targets[i] = target_index
+            if targets is not None and target is not None:
+                targets[i] = target
 
         image_sizes = [img.shape[-2:] for img in images]
         images = self.batch_images(images, size_divisible=self.size_divisible)

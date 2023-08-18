@@ -39,7 +39,7 @@ def main(args):
         )
         
     if args.model_type == 'rotated':
-        model = RotatedFasterRCNN(lr=args.lr)
+        model = RotatedFasterRCNN()
     elif args.model_type == 'oriented':
         # model = OrientedRCNN()
         raise NotImplementedError
@@ -54,10 +54,11 @@ def main(args):
             log_model="all",
             save_dir="."
         )
+        logger.watch(model, log='gradients', log_freq=500, log_graph=True)
+        
     else:
         logger = None  
     
-    logger.watch(model, log='gradients', log_freq=100)
     
     trainer = pl.Trainer(
         logger=logger, 
@@ -68,7 +69,7 @@ def main(args):
         deterministic=False,
         profiler="pytorch",
         # fast_dev_run=True,
-        accelerator="cpu",
+        # accelerator="cpu",
         # detect_anomaly=True
     )
     trainer.fit(
@@ -85,7 +86,6 @@ if __name__ == '__main__':
     parser.add_argument('--experiment_name', type=str, default='test upload', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--num_epochs', type=int, default=200)

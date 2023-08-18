@@ -196,21 +196,6 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_h = torch.exp(dh) * heights[:, None]
     pred_a = da
     
-    # Distance from center to box's corner.
-    # c_to_c_h = torch.tensor(0.5, dtype=pred_ctr_y.dtype, device=pred_h.device) * pred_h
-    # c_to_c_w = torch.tensor(0.5, dtype=pred_ctr_x.dtype, device=pred_w.device) * pred_w
-
-    # pred_boxes1 = pred_ctr_x - c_to_c_w
-    # pred_boxes2 = pred_ctr_y - c_to_c_h
-    # pred_boxes3 = pred_ctr_x + c_to_c_w
-    # pred_boxes4 = pred_ctr_y + c_to_c_h
-    
-    # pred_boxes = torch.stack((pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a), dim=2).flatten(1)
-    # return pred_boxes
-
-    # w_regular = torch.where(pred_w > pred_h, pred_w, pred_h)
-    # h_regular = torch.where(pred_w > pred_h, pred_h, pred_w)
-    # theta_regular = torch.where(pred_w > pred_h, pred_a, pred_a + np.pi / 2)
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes
 

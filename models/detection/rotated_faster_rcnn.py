@@ -33,7 +33,7 @@ from .transform import GeneralizedRCNNTransform
 def _default_anchor_generator():
     # sizes = scale x stride
     sizes = ((32,), (64,), (128,), (256,), (512,),)
-    ratios = ((0.5, 1.0, 2.0),) * 5
+    ratios = ((0.5, 1.0, 2.0),) * len(sizes)
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 
 def _check_for_degenerate_boxes(targets):

@@ -125,7 +125,6 @@ class RoIHeads(nn.Module):
         
         box_similarity = self.horizontal_box_similarity if horizontal else self.rotated_box_similarity
         for proposals_in_image, gt_boxes_in_image, gt_labels_in_image in zip(proposals, gt_boxes, gt_labels):
-            print("gt_labels_in_image", gt_labels_in_image.shape)
             if gt_boxes_in_image.numel() == 0:
                 # Background image
                 device = proposals_in_image.device
@@ -135,17 +134,11 @@ class RoIHeads(nn.Module):
                 labels_in_image = torch.zeros((proposals_in_image.shape[0],), dtype=torch.int64, device=device)
             else:
                 if not horizontal:
+                    # Need to convert horizontal proposals to rotated proposals with angles=0, as
                     # rotated gt_boxes are in rotated format (cx, cy, w, h, a)
                     # proposals are in horizontal format (x1, y1, x2, y2)
                     # TODO support le90 and le135
                     proposals_in_image = box_ops.hbb2obb(proposals_in_image)
-                    # x1, y1, x2, y2 = proposals_in_image[:, 0:1], proposals_in_image[:, 1:2], proposals_in_image[:, 2:3], proposals_in_image[:, 3:4]
-                    # cx, cy, w, h = (x1 + x2) / 2, (y1 + y2) / 2, x2 - x1, y2 - y1
-                    # w_regular = torch.where(w > h, w, h)
-                    # h_regular = torch.where(w > h, h, w)
-                    # a = torch.zeros_like(cx)
-                    # theta_regular = torch.where(w > h, a, a + torch.pi / 2)
-                    # proposals_in_image = torch.cat((cx, cy, w_regular, h_regular, theta_regular), 1)
                     
                 match_quality_matrix = box_similarity(gt_boxes_in_image, proposals_in_image)
                 
@@ -212,6 +205,7 @@ class RoIHeads(nn.Module):
         proposals = self.add_gt_proposals(proposals, gt_boxes)
         
         # get matching gt indices for each proposal
+        # horizontal: using horizontal or rotated boxes for matching
         matched_idxs, labels = self.assign_targets_to_proposals(proposals, gt_oboxes, gt_labels, horizontal=False)
         # sample a fixed proportion of positive-negative proposals
         sampled_idxs = self.subsample(labels)
@@ -259,7 +253,7 @@ class RoIHeads(nn.Module):
         box_coder = self.box_coder if horizontal else self.hbox_coder
         nms = box_ops.batched_nms if horizontal else box_ops.batched_nms_rotated
         nms_thresh = self.nms_thresh if horizontal else self.nms_thresh_rotated
-        remove_small = box_ops.remove_small_boxes if horizontal else box_ops.remove_small_rotated_boxes
+        remove_small_fn = box_ops.remove_small_boxes if horizontal else box_ops.remove_small_rotated_boxes
         
         device = class_logits.device
         num_classes = class_logits.shape[-1]
@@ -295,10 +289,10 @@ class RoIHeads(nn.Module):
             scores = scores.reshape(-1)
             labels = labels.reshape(-1)
             # remove low scoring boxes
-            inds = torch.where(scores > self.score_thresh)[0]
-            boxes, scores, labels = boxes[inds, :], scores[inds], labels[inds]
+            keep = torch.where(scores > self.score_thresh)[0]
+            boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
             # remove empty boxes
-            keep = remove_small(boxes, min_size=1e-2)
+            keep = remove_small_fn(boxes, min_size=1e-2)
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
              
             # non-maximum suppression, independently done per class
@@ -364,9 +358,9 @@ class RoIHeads(nn.Module):
             for i in range(len(hboxes)):
                 result.append(
                     {
-                        "hboxes": hboxes[i],
-                        "hlabels": hlabels[i],
-                        "hscores": hscores[i],
+                        "bboxes": hboxes[i],
+                        "labels": hlabels[i],
+                        "scores": hscores[i],
                         
                         "oboxes": oboxes[i],
                         "olabels": olabels[i],

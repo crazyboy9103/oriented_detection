@@ -201,6 +201,13 @@ def eval_rbbox_map(det_results,
     Returns:
         tuple: (mAP, [dict, dict, ...])
     """
+    # for result in det_results:
+    #     for i, t in enumerate(result):
+    #         result[i] = t.detach().cpu()
+    for ann in annotations:
+        for k, v in ann.items():
+            ann[k] = v.detach().cpu()
+            
     assert len(det_results) == len(annotations)
     if len(det_results) == 0:
         return 0, []

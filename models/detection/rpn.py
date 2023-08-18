@@ -73,7 +73,7 @@ class RPNHead(nn.Module):
         bbox_reg = []
         for feature in features:
             t = self.conv(feature)
-            # TODO In mmrotate, it adds one relu layer here (seems to be due to regularization effect?)
+            # TODO In mmrotate, it adds one relu layer here but not in torchvision
             t = F.relu(t)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
@@ -252,6 +252,7 @@ class RegionProposalNetwork(nn.Module):
         num_images = proposals.shape[0]
         device = proposals.device
         # do not backprop through objectness
+        # ??? Why detach?
         objectness = objectness.detach()
         objectness = objectness.reshape(num_images, -1)
 

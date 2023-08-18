@@ -60,7 +60,10 @@ HOST_DEVICE_INLINE void get_rotated_vertices(
     const RotatedBox<T>& box,
     Point<T> (&pts)[4]) {
   // M_PI / 180. == 0.01745329251
-  double theta = box.a * 0.01745329251;
+
+  /*Modified, as the box is in radian already in my implementation*/
+  // double theta = box.a * 0.01745329251;
+  double theta = box.a;
   T cosTheta2 = (T)cos(theta) * 0.5f;
   T sinTheta2 = (T)sin(theta) * 0.5f;
 

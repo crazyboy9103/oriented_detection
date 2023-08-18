@@ -7,9 +7,9 @@ from .base import BaseDataset, collate_fn
 
 class MVTecDataset(BaseDataset):
     CLASSES = ('nut', 'wood_screw', 'lag_wood_screw', 'bolt', 
-               'black_oxide_screw', 'shiny_screw', 'short_wood_screw', 
-               'long_lag_screw', 'large_nut', 'nut2', 'nut1', 
-               'machine_screw', 'short_machine_screw')
+               'black_oxide_screw', 'shiny_screw', 'short_wood_screw', 'long_lag_screw', 
+               'large_nut', 'nut2', 'nut1', 'machine_screw', 
+               'short_machine_screw')
 
     PALETTE = [(165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
                (138, 43, 226), (255, 128, 0), (255, 0, 255), (0, 255, 255),
