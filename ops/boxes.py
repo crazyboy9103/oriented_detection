@@ -37,6 +37,7 @@ from detectron2._C import (
 )
 
 
+# TODO 
 def clip_rotated_boxes_to_image(oboxes: Tensor, size: Tuple[int, int]) -> Tensor:
     """
     Clip boxes so that they lie inside an image of size `size`.

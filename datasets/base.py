@@ -36,17 +36,17 @@ class BaseDataset(Dataset):
     
     @classmethod
     def class_to_idx(cls, class_name):
-        return cls.CLASSES.index(class_name) + 1 # 0 is background
+        return cls.CLASSES.index(class_name) # 0 is background
     
     @classmethod
     def idx_to_class(cls, idx):
-        return cls.CLASSES[idx - 1] # 0 is background
+        return cls.CLASSES[idx] # 0 is background
     
     @classmethod
     def get_palette(cls, value):
         if isinstance(value, str):
             value = cls.class_to_idx(value)
-        return cls.PALETTE[value - 1]
+        return cls.PALETTE[value]
     
     def prepare_data(self, save_dir, data_path):
         assert save_dir.split(".")[-1] in ("pth", "pt"), "save_dir must be a .pth or .pt file"
@@ -73,8 +73,7 @@ class BaseDataset(Dataset):
             Args:
                 ann_folder: folder that contains DOTA annotations txt files
         """
-        cls_map = {c: i+1 for i, c in enumerate(self.CLASSES)}
-        cls_map['background'] = 0
+        cls_map = {c: i for i, c in enumerate(self.CLASSES)}
         
         ann_files = glob.glob(ann_folder + '/*.txt')
         img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".png") for ann_file in ann_files]
@@ -130,7 +129,7 @@ class BaseDataset(Dataset):
                         
                     elif self.hbb_version == "xywh":
                         gt_areas.append(hbb[2] * hbb[3])
-                    
+                      
                     gt_oareas.append(obb[2] * obb[3])
                                             
             ann = {}

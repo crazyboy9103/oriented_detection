@@ -12,6 +12,36 @@ from torchvision.models.detection import _utils as det_utils
 from ops import boxes as box_ops
 from models.detection.box_coders import BoxCoder, HBoxCoder, OBoxCoder
 
+class OrientedRPNHead(nn.Module):
+    """
+    RPN head used in Oriented R-CNN
+    """
+    def __init__(self, in_channels: int, num_anchors: int, conv_depth=1) -> None:
+        super().__init__()
+        convs = []
+        for _ in range(conv_depth):
+            convs.append(Conv2dNormActivation(in_channels, in_channels, kernel_size=3, norm_layer=None))
+        self.conv = nn.Sequential(*convs)
+        self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 6, kernel_size=1, stride=1)
+
+        for layer in self.modules():
+            if isinstance(layer, nn.Conv2d):
+                torch.nn.init.normal_(layer.weight, std=0.01)  # type: ignore[arg-type]
+                if layer.bias is not None:
+                    torch.nn.init.constant_(layer.bias, 0)  # type: ignore[arg-type]
+                    
+    def forward(self, features: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
+        logits = []
+        bbox_reg = []
+        for feature in features:
+            t = self.conv(feature)
+            # TODO In mmrotate, it adds one relu layer here but not in torchvision
+            # t = F.relu(t)
+            logits.append(self.cls_logits(t))
+            bbox_reg.append(self.bbox_pred(t))
+        return logits, bbox_reg
+    
 class RPNHead(nn.Module):
     """
     Adds a simple RPN Head with classification and regression heads
@@ -74,7 +104,7 @@ class RPNHead(nn.Module):
         for feature in features:
             t = self.conv(feature)
             # TODO In mmrotate, it adds one relu layer here but not in torchvision
-            t = F.relu(t)
+            # t = F.relu(t)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg
@@ -376,8 +406,8 @@ class RegionProposalNetwork(nn.Module):
 
         losses = {}
         if targets is not None:
-            num_images = len(images.image_sizes)
-            losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas, num_images)
+            # num_images = len(images.image_sizes)
+            losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas)
             
         else:
             if self.training:
@@ -385,7 +415,7 @@ class RegionProposalNetwork(nn.Module):
             
         return boxes, losses
 
-    def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas, num_images):
+    def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas):
         labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
         regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
         loss_objectness, loss_rpn_box_reg = self.compute_loss(

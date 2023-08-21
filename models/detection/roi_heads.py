@@ -8,10 +8,21 @@ from torchvision.ops import roi_align
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-# from models.detection import det_utils
 from models.detection.box_coders import BoxCoder, HBoxCoder, OBoxCoder
 
-
+class FocalLoss(nn.Module):
+    def __init__(self, weight=None, gamma=2, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.weight = weight #weight parameter will act as the alpha parameter to balance class weights
+        self.gamma = gamma
+        self.reduction = reduction
+        
+    def forward(self, input, target):
+        ce_loss = F.cross_entropy(input, target, reduction=self.reduction, weight=self.weight)
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
+        return focal_loss
+    
 def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression, 
                           labels, hbox_regression_targets, obox_regression_targets):
     # type: (Tensor, Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor, Tensor]
@@ -35,11 +46,12 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
     N, num_classes = class_logits.shape
     
     labels = torch.cat(labels, dim=0)
+    pos_inds = torch.where(labels > 0)[0]
+    labels_pos = labels[pos_inds]
+    hbox_regression_targets = torch.cat(hbox_regression_targets, dim=0)
+    obox_regression_targets = torch.cat(obox_regression_targets, dim=0)
     
     def compute_box_loss(regression, regression_targets, horizontal=True):
-        pos_inds = torch.where(labels > 0)[0]
-        labels_pos = labels[pos_inds]
-        regression_targets = torch.cat(regression_targets, dim=0)
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
         # advanced indexing
@@ -51,14 +63,15 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
             beta=1.0,
             reduction="sum",
         )
-        box_loss = box_loss / pos_inds.numel()
+        box_loss = box_loss / labels.numel()
         return box_loss
     # Compute for horizontal branch 
     hbox_loss = compute_box_loss(hbox_regression, hbox_regression_targets, horizontal=True)
     # Compute for rotated branch
     obox_loss = compute_box_loss(obox_regression, obox_regression_targets, horizontal=False)
     try:
-        classification_loss = F.cross_entropy(class_logits, labels)
+        # classification_loss = F.cross_entropy(class_logits, labels)
+        classification_loss = FocalLoss()(class_logits, labels)
     except:
         classification_loss = torch.tensor(0.0)
         
@@ -184,6 +197,7 @@ class RoIHeads(nn.Module):
         if not all(["labels" in t for t in targets]):
             raise ValueError("Every element of targets should have a labels key")
 
+    @torch.no_grad()
     def select_training_samples(
         self,
         proposals: List[Tensor],
@@ -200,8 +214,8 @@ class RoIHeads(nn.Module):
         gt_labels = [t["labels"] for t in targets]
 
         # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
-        # append ground-truth bboxes to propos
-        # Use of horizontal proposals
+        # append ground-truth bboxes to proposals for classifier 
+        # (box regressor does not obtain any gradients from them)
         proposals = self.add_gt_proposals(proposals, gt_boxes)
         
         # get matching gt indices for each proposal
@@ -217,9 +231,7 @@ class RoIHeads(nn.Module):
             img_sampled_idxs = sampled_idxs[img_id]
             
             proposals[img_id] = proposals[img_id][img_sampled_idxs]
-            
             labels[img_id] = labels[img_id][img_sampled_idxs]
-                        
             matched_idxs[img_id] = matched_idxs[img_id][img_sampled_idxs]
             
             gt_hboxes_in_image = gt_boxes[img_id]
@@ -334,11 +346,6 @@ class RoIHeads(nn.Module):
                     raise TypeError(f"target labels must of int64 type, instead got {t['labels'].dtype}")
 
         proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets = self.select_training_samples(proposals, targets)
-        # print("proposals", proposals[0].shape)
-        # print("matched_idxs", matched_idxs[0].shape)
-        # print("labels", labels[0].shape)
-        # print("horizontal_regression_targets", horizontal_regression_targets[0].shape)
-        # print("rotated_regression_targets", rotated_regression_targets[0].shape)
         # Horizontal ROI Pooling
         box_features = self.box_roi_pool(features, proposals, image_shapes)
         box_features = self.box_head(box_features)

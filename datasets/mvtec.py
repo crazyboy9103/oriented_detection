@@ -1,4 +1,4 @@
-from typing import Literal, Callable, Optional, Dict, Any
+from typing import Literal, Dict, Any
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
@@ -6,12 +6,12 @@ from torch.utils.data import DataLoader
 from .base import BaseDataset, collate_fn
 
 class MVTecDataset(BaseDataset):
-    CLASSES = ('nut', 'wood_screw', 'lag_wood_screw', 'bolt', 
+    CLASSES = ('background', 'nut', 'wood_screw', 'lag_wood_screw', 'bolt', 
                'black_oxide_screw', 'shiny_screw', 'short_wood_screw', 'long_lag_screw', 
                'large_nut', 'nut2', 'nut1', 'machine_screw', 
                'short_machine_screw')
 
-    PALETTE = [(165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
+    PALETTE = [(255, 255, 255), (165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
                (138, 43, 226), (255, 128, 0), (255, 0, 255), (0, 255, 255),
                (255, 193, 193), (0, 51, 153), (255, 250, 205), (0, 139, 139),
                (255, 255, 0)]
@@ -57,16 +57,6 @@ class MVTecDataModule(pl.LightningDataModule):
         pass
 
     def setup(self, stage: Literal["fit", "test"] = "fit") -> None:
-        # if stage == "fit":
-        #     self.train_dataset = MVTecDataset(
-        #         save_dir = self.save_dir,
-        #         data_path = self.data_path,
-        #         angle_version = self.angle_version, 
-        #         hbb_version = self.hbb_version,
-        #         split = "train",
-        #     )
-
-        # if stage == "test":
         self.train_dataset = MVTecDataset(
             save_dir = self.save_dir,
             data_path = self.data_path,

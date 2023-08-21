@@ -2,9 +2,10 @@ import argparse
 
 import pytorch_lightning as pl
 # from oriented_rcnn import OrientedRCNN
-from rotated_faster_rcnn import RotatedFasterRCNN
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
+from rotated_faster_rcnn import RotatedFasterRCNN
 from datasets.mvtec import MVTecDataModule
 from datasets.dota import DotaDataModule
 
@@ -51,7 +52,7 @@ def main(args):
         logger = WandbLogger(
             project=args.project_name,
             name=args.experiment_name,
-            log_model="all",
+            log_model=True,
             save_dir="."
         )
         logger.watch(model, log='gradients', log_freq=500, log_graph=True)
@@ -59,6 +60,10 @@ def main(args):
     else:
         logger = None  
     
+    callbacks = [
+        ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-loss", mode="min"),
+        LearningRateMonitor(logging_interval='step')
+    ]
     
     trainer = pl.Trainer(
         logger=logger, 
@@ -70,7 +75,8 @@ def main(args):
         profiler="pytorch",
         # fast_dev_run=True,
         # accelerator="cpu",
-        # detect_anomaly=True
+        # detect_anomaly=True,
+        callbacks=callbacks,
     )
     trainer.fit(
         model, 
@@ -88,7 +94,7 @@ if __name__ == '__main__':
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_epochs', type=int, default=200)
+    parser.add_argument('--num_epochs', type=int, default=24)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     

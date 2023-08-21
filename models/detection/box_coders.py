@@ -124,35 +124,17 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     wh = weights[3]
     wa = weights[4]
     
-    bboxes = box_ops.hbb2obb(bboxes, version='oc')
-    ex_ctr_x =   bboxes[:, 0]# .unsqueeze(1)
-    ex_ctr_y =   bboxes[:, 1]# .unsqueeze(1)
-    ex_widths =  bboxes[:, 2]# .unsqueeze(1)
-    ex_heights = bboxes[:, 3]# .unsqueeze(1)
-    ex_angles =  bboxes[:, 4]# .unsqueeze(1)
-    # bboxes_x1 = bboxes[:, 0].unsqueeze(1)
-    # bboxes_y1 = bboxes[:, 1].unsqueeze(1)
-    # bboxes_x2 = bboxes[:, 2].unsqueeze(1)
-    # bboxes_y2 = bboxes[:, 3].unsqueeze(1)
-    # ex_widths = bboxes_x2 - bboxes_x1
-    # ex_heights = bboxes_y2 - bboxes_y1
-    # ex_ctr_x = bboxes_x1 + 0.5 * ex_widths
-    # ex_ctr_y = bboxes_y1 + 0.5 * ex_heights
-    
-    gt_ctr_x =   gt_bboxes[:, 0]#.unsqueeze(1)
-    gt_ctr_y =   gt_bboxes[:, 1]#.unsqueeze(1)
-    gt_widths =  gt_bboxes[:, 2]#.unsqueeze(1)
-    gt_heights = gt_bboxes[:, 3]#.unsqueeze(1)
-    gt_angles =  gt_bboxes[:, 4]#.unsqueeze(1)
+    ex_ctr_x = (bboxes[:, 0] + bboxes[:, 2]) * 0.5
+    ex_ctr_y = (bboxes[:, 1] + bboxes[:, 3]) * 0.5
+    ex_widths = bboxes[:, 2] - bboxes[:, 0]
+    ex_heights = bboxes[:, 3] - bboxes[:, 1]
 
-    # dtheta1 = gt_angles
-    # dtheta2 = gt_angles + np.pi / 2
-    # abs_dtheta1 = torch.abs(dtheta1)
-    # abs_dtheta2 = torch.abs(dtheta2)
-    # gw_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_widths, gt_heights)
-    # gh_regular = torch.where(abs_dtheta1 < abs_dtheta2, gt_heights, gt_widths)
-    # gt_angles = torch.where(abs_dtheta1 < abs_dtheta2, dtheta1, dtheta2)
-        
+    gt_ctr_x =   gt_bboxes[:, 0]
+    gt_ctr_y =   gt_bboxes[:, 1]
+    gt_widths =  gt_bboxes[:, 2]
+    gt_heights = gt_bboxes[:, 3]
+    gt_angles =  gt_bboxes[:, 4]
+
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
     targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
     targets_dw = ww * torch.log(gt_widths / ex_widths)
@@ -169,16 +151,10 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
 
 @torch.jit._script_if_tracing
 def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
-    # widths = bboxes[:, 2] - bboxes[:, 0]
-    # heights = bboxes[:, 3] - bboxes[:, 1]
-    # ctr_x = bboxes[:, 0] + 0.5 * widths
-    # ctr_y = bboxes[:, 1] + 0.5 * heights
-    bboxes = box_ops.hbb2obb(bboxes, version='oc')
-    ctr_x = bboxes[:, 0]
-    ctr_y = bboxes[:, 1]
-    widths = bboxes[:, 2]
-    heights = bboxes[:, 3]
-    angles = bboxes[:, 4]
+    widths = bboxes[:, 2] - bboxes[:, 0]
+    heights = bboxes[:, 3] - bboxes[:, 1]
+    ctr_x = bboxes[:, 0] + 0.5 * widths
+    ctr_y = bboxes[:, 1] + 0.5 * heights
     
     wx, wy, ww, wh, wa = weights
     dx = pred_bboxes[:, 0::5] / wx
@@ -189,13 +165,12 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     # Prevent sending too large values into torch.exp()
     dw = torch.clamp(dw, max=bbox_xform_clip)
     dh = torch.clamp(dh, max=bbox_xform_clip)
-
+    
     pred_ctr_x = dx * widths[:, None] + ctr_x[:, None]
     pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
     pred_w = torch.exp(dw) * widths[:, None]
     pred_h = torch.exp(dh) * heights[:, None]
     pred_a = da
-    
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes
 
@@ -223,14 +198,99 @@ class HBoxCoder(BaseBoxCoder):
     
     def decode_single(self, pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, box_sum: int) -> Tensor:
         assert pred_bboxes.size(0) == bboxes.size(0)
-        # assert pred_bboxes.size(-1) == 5
-        # assert bboxes.size(-1) == 4
+        assert pred_bboxes.size(-1) % 5 == 0
+        assert bboxes.size(-1) == 4
         if pred_bboxes.ndim == 3:
             assert pred_bboxes.size(1) == bboxes.size(1)
         pred_boxes = decode_hboxes(pred_bboxes, bboxes, weights, self.bbox_xform_clip)
         if box_sum > 0:
             pred_boxes = pred_boxes.reshape(box_sum, -1, 5)
         return pred_boxes
+
+
+
+@torch.jit._script_if_tracing
+def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
+    """
+    Encode a set of proposals with respect to some
+    reference boxes
+    ! IMPORTANT !
+    This function presumes that the reference boxes are horizontal and the gt boxes are rotated.
+
+    Args:
+        gt_bboxes (Tensor[-1, 5]): rotated reference boxes ``(cx, cy, w, h, a)``
+        bboxes (Tensor[-1, 4]): boxes to be encoded ``(x1, y1, x2, y2)``
+        weights (Tensor[6]): the weights for ``(x, y, w, h, alpha, beta)``
+    """
+
+    # perform some unpacking to make it JIT-fusion friendly
+    wx = weights[0]
+    wy = weights[1]
+    ww = weights[2]
+    wh = weights[3]
+    wa = weights[4]
+    wb = weights[5]
+    
+    ex_ctr_x = (bboxes[:, 0] + bboxes[:, 2]) * 0.5
+    ex_ctr_y = (bboxes[:, 1] + bboxes[:, 3]) * 0.5
+    ex_widths = bboxes[:, 2] - bboxes[:, 0]
+    ex_heights = bboxes[:, 3] - bboxes[:, 1]
+
+    hbb, poly = box_ops.obb2xyxy(gt_bboxes), box_ops.obb2poly(gt_bboxes)
+    gt_ctr_x = (hbb[..., 0] + hbb[..., 2]) * 0.5
+    gt_ctr_y = (hbb[..., 1] + hbb[..., 3]) * 0.5
+    gt_widths = hbb[..., 2] - hbb[..., 0]
+    gt_heights = hbb[..., 3] - hbb[..., 1]
+    
+    x_coor, y_coor = poly[:, 0::2], poly[:, 1::2]
+    y_min, _ = torch.min(y_coor, dim=1, keepdim=True)
+    x_max, _ = torch.max(x_coor, dim=1, keepdim=True)
+
+    _x_coor = x_coor.clone()
+    _x_coor[torch.abs(y_coor - y_min) > 0.1] = -1000
+    gt_alpha, _ = torch.max(_x_coor, dim=1)
+
+    _y_coor = y_coor.clone()
+    _y_coor[torch.abs(x_coor - x_max) > 0.1] = -1000
+    gt_beta, _ = torch.max(_y_coor, dim=1)
+
+    targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
+    targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
+    targets_dw = ww * torch.log(gt_widths / ex_widths)
+    targets_dh = wh * torch.log(gt_heights / ex_heights)
+    targets_da = wa * (gt_alpha - gt_ctr_x) / gt_widths
+    targets_db = wb * (gt_beta - gt_ctr_y) / gt_heights
+    targets = torch.cat([targets_dx, targets_dy, targets_dw, targets_dh, targets_da, targets_db], dim=1)
+    return targets
+
+@torch.jit._script_if_tracing
+def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
+    bboxes = box_ops.hbb2obb(bboxes, version='oc')
+    ctr_x = bboxes[:, 0]
+    ctr_y = bboxes[:, 1]
+    widths = bboxes[:, 2]
+    heights = bboxes[:, 3]
+    angles = bboxes[:, 4]
+    
+    wx, wy, ww, wh, wa = weights
+    dx = pred_bboxes[:, 0::5] / wx
+    dy = pred_bboxes[:, 1::5] / wy
+    dw = pred_bboxes[:, 2::5] / ww
+    dh = pred_bboxes[:, 3::5] / wh
+    da = pred_bboxes[:, 4::5] / wa
+    # Prevent sending too large values into torch.exp()
+    dw = torch.clamp(dw, max=bbox_xform_clip)
+    dh = torch.clamp(dh, max=bbox_xform_clip)
+
+    pred_ctr_x = dx * widths[:, None] + ctr_x[:, None]
+    pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
+    pred_w = torch.exp(dw) * widths[:, None]
+    pred_h = torch.exp(dh) * heights[:, None]
+    pred_a = da
+    
+    pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
+    return pred_boxes
+
 
 class OBoxCoder(BaseBoxCoder):
     def __init__(self, weights: Tuple[float, float, float, float, float]):

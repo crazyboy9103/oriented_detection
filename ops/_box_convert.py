@@ -104,10 +104,6 @@ def poly2obb(polys, version='oc'):
     """
     if version == 'oc':
         results = poly2obb_oc(polys)
-    elif version == 'le135':
-        results = poly2obb_le135(polys)
-    elif version == 'le90':
-        results = poly2obb_le90(polys)
     else:
         raise NotImplementedError
     return results    
@@ -124,10 +120,6 @@ def poly2obb_np(polys, version='oc'):
     """
     if version == 'oc':
         results = poly2obb_np_oc(polys)
-    elif version == 'le135':
-        results = poly2obb_np_le135(polys)
-    elif version == 'le90':
-        results = poly2obb_np_le90(polys)
     else:
         raise NotImplementedError
     return results
@@ -173,10 +165,6 @@ def obb2hbb(rbboxes, version='oc'):
     """
     if version == 'oc':
         results = obb2hbb_oc(rbboxes)
-    elif version == 'le135':
-        results = obb2hbb_le135(rbboxes)
-    elif version == 'le90':
-        results = obb2hbb_le90(rbboxes)
     else:
         raise NotImplementedError
     return results
@@ -194,10 +182,6 @@ def obb2poly(rbboxes, version='oc'):
     """
     if version == 'oc':
         results = obb2poly_oc(rbboxes)
-    elif version == 'le135':
-        results = obb2poly_le135(rbboxes)
-    elif version == 'le90':
-        results = obb2poly_le90(rbboxes)
     else:
         raise NotImplementedError
     return results
@@ -215,10 +199,6 @@ def obb2poly_np(rbboxes, version='oc'):
     """
     if version == 'oc':
         results = obb2poly_np_oc(rbboxes)
-    elif version == 'le135':
-        results = obb2poly_np_le135(rbboxes)
-    elif version == 'le90':
-        results = obb2poly_np_le90(rbboxes)
     else:
         raise NotImplementedError
     return results
@@ -236,10 +216,6 @@ def obb2xyxy(rbboxes, version='oc'):
     """
     if version == 'oc':
         results = obb2xyxy_oc(rbboxes)
-    elif version == 'le135':
-        results = obb2xyxy_le135(rbboxes)
-    elif version == 'le90':
-        results = obb2xyxy_le90(rbboxes)
     else:
         raise NotImplementedError
     return results
@@ -261,10 +237,6 @@ def hbb2obb(hbboxes, version='oc'):
         is_list = True
     if version == 'oc':
         results = hbb2obb_oc(hbboxes)
-    elif version == 'le135':
-        results = hbb2obb_le135(hbboxes)
-    elif version == 'le90':
-        results = hbb2obb_le90(hbboxes)
     else:
         raise NotImplementedError
     return torch.split(results, len(results), dim=0) if is_list else results 
@@ -296,72 +268,6 @@ def poly2obb_oc(polys):
     return rbboxes
 
 
-def poly2obb_le135(polys):
-    """Convert polygons to oriented bounding boxes.
-
-    Args:
-        polys (torch.Tensor): [x0,y0,x1,y1,x2,y2,x3,y3]
-
-    Returns:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-    """
-    polys = torch.reshape(polys, [-1, 8])
-    pt1, pt2, pt3, pt4 = polys[..., :8].chunk(4, 1)
-    edge1 = torch.sqrt(
-        torch.pow(pt1[..., 0] - pt2[..., 0], 2) +
-        torch.pow(pt1[..., 1] - pt2[..., 1], 2))
-    edge2 = torch.sqrt(
-        torch.pow(pt2[..., 0] - pt3[..., 0], 2) +
-        torch.pow(pt2[..., 1] - pt3[..., 1], 2))
-    angles1 = torch.atan2((pt2[..., 1] - pt1[..., 1]),
-                          (pt2[..., 0] - pt1[..., 0]))
-    angles2 = torch.atan2((pt4[..., 1] - pt1[..., 1]),
-                          (pt4[..., 0] - pt1[..., 0]))
-    angles = polys.new_zeros(polys.shape[0])
-    angles[edge1 > edge2] = angles1[edge1 > edge2]
-    angles[edge1 <= edge2] = angles2[edge1 <= edge2]
-    angles = norm_angle(angles, 'le135')
-    x_ctr = (pt1[..., 0] + pt3[..., 0]) / 2.0
-    y_ctr = (pt1[..., 1] + pt3[..., 1]) / 2.0
-    edges = torch.stack([edge1, edge2], dim=1)
-    width, _ = torch.max(edges, 1)
-    height, _ = torch.min(edges, 1)
-    return torch.stack([x_ctr, y_ctr, width, height, angles], 1)
-
-
-def poly2obb_le90(polys):
-    """Convert polygons to oriented bounding boxes.
-
-    Args:
-        polys (torch.Tensor): [x0,y0,x1,y1,x2,y2,x3,y3]
-
-    Returns:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-    """
-    polys = torch.reshape(polys, [-1, 8])
-    pt1, pt2, pt3, pt4 = polys[..., :8].chunk(4, 1)
-    edge1 = torch.sqrt(
-        torch.pow(pt1[..., 0] - pt2[..., 0], 2) +
-        torch.pow(pt1[..., 1] - pt2[..., 1], 2))
-    edge2 = torch.sqrt(
-        torch.pow(pt2[..., 0] - pt3[..., 0], 2) +
-        torch.pow(pt2[..., 1] - pt3[..., 1], 2))
-    angles1 = torch.atan2((pt2[..., 1] - pt1[..., 1]),
-                          (pt2[..., 0] - pt1[..., 0]))
-    angles2 = torch.atan2((pt4[..., 1] - pt1[..., 1]),
-                          (pt4[..., 0] - pt1[..., 0]))
-    angles = polys.new_zeros(polys.shape[0])
-    angles[edge1 > edge2] = angles1[edge1 > edge2]
-    angles[edge1 <= edge2] = angles2[edge1 <= edge2]
-    angles = norm_angle(angles, 'le90')
-    x_ctr = (pt1[..., 0] + pt3[..., 0]) / 2.0
-    y_ctr = (pt1[..., 1] + pt3[..., 1]) / 2.0
-    edges = torch.stack([edge1, edge2], dim=1)
-    width, _ = torch.max(edges, 1)
-    height, _ = torch.min(edges, 1)
-    return torch.stack([x_ctr, y_ctr, width, height, angles], 1)
-
-
 def poly2obb_np_oc(poly):
     """Convert polygons to oriented bounding boxes.
 
@@ -384,67 +290,6 @@ def poly2obb_np_oc(poly):
             w, h = h, w
     a = a / 180 * np.pi
     assert 0 < a <= np.pi / 2
-    return x, y, w, h, a
-
-
-def poly2obb_np_le135(poly):
-    """Convert polygons to oriented bounding boxes.
-
-    Args:
-        polys (ndarray): [x0,y0,x1,y1,x2,y2,x3,y3]
-
-    Returns:
-        obbs (ndarray): [x_ctr,y_ctr,w,h,angle]
-    """
-    poly = np.array(poly[:8], dtype=np.float32)
-    pt1 = (poly[0], poly[1])
-    pt2 = (poly[2], poly[3])
-    pt3 = (poly[4], poly[5])
-    pt4 = (poly[6], poly[7])
-    edge1 = np.sqrt((pt1[0] - pt2[0]) * (pt1[0] - pt2[0]) + (pt1[1] - pt2[1]) *
-                    (pt1[1] - pt2[1]))
-    edge2 = np.sqrt((pt2[0] - pt3[0]) * (pt2[0] - pt3[0]) + (pt2[1] - pt3[1]) *
-                    (pt2[1] - pt3[1]))
-    if edge1 < 2 or edge2 < 2:
-        return
-    width = max(edge1, edge2)
-    height = min(edge1, edge2)
-    angle = 0
-    if edge1 > edge2:
-        angle = np.arctan2(float(pt2[1] - pt1[1]), float(pt2[0] - pt1[0]))
-    elif edge2 >= edge1:
-        angle = np.arctan2(float(pt4[1] - pt1[1]), float(pt4[0] - pt1[0]))
-    angle = norm_angle(angle, 'le135')
-    x_ctr = float(pt1[0] + pt3[0]) / 2
-    y_ctr = float(pt1[1] + pt3[1]) / 2
-    return x_ctr, y_ctr, width, height, angle
-
-
-def poly2obb_np_le90(poly):
-    """Convert polygons to oriented bounding boxes.
-
-    Args:
-        polys (ndarray): [x0,y0,x1,y1,x2,y2,x3,y3]
-
-    Returns:
-        obbs (ndarray): [x_ctr,y_ctr,w,h,angle]
-    """
-    bboxps = np.array(poly).reshape((4, 2))
-    rbbox = cv2.minAreaRect(bboxps)
-    x, y, w, h, a = rbbox[0][0], rbbox[0][1], rbbox[1][0], rbbox[1][1], rbbox[
-        2]
-    if w < 2 or h < 2:
-        return
-    a = a / 180 * np.pi
-    if w < h:
-        w, h = h, w
-        a += np.pi / 2
-    while not np.pi / 2 > a >= -np.pi / 2:
-        if a >= np.pi / 2:
-            a -= np.pi
-        else:
-            a += np.pi
-    assert np.pi / 2 > a >= -np.pi / 2
     return x, y, w, h, a
 
 
@@ -473,60 +318,6 @@ def obb2poly_oc(rboxes):
     return torch.stack([p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y], dim=-1)
 
 
-def obb2poly_le135(rboxes):
-    """Convert oriented bounding boxes to polygons.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-
-    Returns:
-        polys (torch.Tensor): [x0,y0,x1,y1,x2,y2,x3,y3]
-    """
-    N = rboxes.shape[0]
-    if N == 0:
-        return rboxes.new_zeros((rboxes.size(0), 8))
-    x_ctr, y_ctr, width, height, angle = rboxes.select(1, 0), rboxes.select(
-        1, 1), rboxes.select(1, 2), rboxes.select(1, 3), rboxes.select(1, 4)
-    tl_x, tl_y, br_x, br_y = \
-        -width * 0.5, -height * 0.5, \
-        width * 0.5, height * 0.5
-    rects = torch.stack([tl_x, br_x, br_x, tl_x, tl_y, tl_y, br_y, br_y],
-                        dim=0).reshape(2, 4, N).permute(2, 0, 1)
-    sin, cos = torch.sin(angle), torch.cos(angle)
-    M = torch.stack([cos, -sin, sin, cos], dim=0).reshape(2, 2,
-                                                          N).permute(2, 0, 1)
-    polys = M.matmul(rects).permute(2, 1, 0).reshape(-1, N).transpose(1, 0)
-    polys[:, ::2] += x_ctr.unsqueeze(1)
-    polys[:, 1::2] += y_ctr.unsqueeze(1)
-    return polys.contiguous()
-
-
-def obb2poly_le90(rboxes):
-    """Convert oriented bounding boxes to polygons.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-
-    Returns:
-        polys (torch.Tensor): [x0,y0,x1,y1,x2,y2,x3,y3]
-    """
-    N = rboxes.shape[0]
-    if N == 0:
-        return rboxes.new_zeros((rboxes.size(0), 8))
-    x_ctr, y_ctr, width, height, angle = rboxes.select(1, 0), rboxes.select(
-        1, 1), rboxes.select(1, 2), rboxes.select(1, 3), rboxes.select(1, 4)
-    tl_x, tl_y, br_x, br_y = \
-        -width * 0.5, -height * 0.5, \
-        width * 0.5, height * 0.5
-    rects = torch.stack([tl_x, br_x, br_x, tl_x, tl_y, tl_y, br_y, br_y],
-                        dim=0).reshape(2, 4, N).permute(2, 0, 1)
-    sin, cos = torch.sin(angle), torch.cos(angle)
-    M = torch.stack([cos, -sin, sin, cos], dim=0).reshape(2, 2,
-                                                          N).permute(2, 0, 1)
-    polys = M.matmul(rects).permute(2, 1, 0).reshape(-1, N).transpose(1, 0)
-    polys[:, ::2] += x_ctr.unsqueeze(1)
-    polys[:, 1::2] += y_ctr.unsqueeze(1)
-    return polys.contiguous()
 
 
 def obb2hbb_oc(rbboxes):
@@ -552,59 +343,6 @@ def obb2hbb_oc(rbboxes):
     return hbboxes
 
 
-def obb2hbb_le135(rotatex_boxes):
-    """Convert oriented bounding boxes to horizontal bounding boxes.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-
-    Returns:
-        hbbs (torch.Tensor): [x_ctr,y_ctr,w,h,-pi/2]
-    """
-    polys = obb2poly_le135(rotatex_boxes)
-    xmin, _ = polys[:, ::2].min(1)
-    ymin, _ = polys[:, 1::2].min(1)
-    xmax, _ = polys[:, ::2].max(1)
-    ymax, _ = polys[:, 1::2].max(1)
-    bboxes = torch.stack([xmin, ymin, xmax, ymax], dim=1)
-    x_ctr = (bboxes[:, 2] + bboxes[:, 0]) / 2.0
-    y_ctr = (bboxes[:, 3] + bboxes[:, 1]) / 2.0
-    edges1 = torch.abs(bboxes[:, 2] - bboxes[:, 0])
-    edges2 = torch.abs(bboxes[:, 3] - bboxes[:, 1])
-    angles = bboxes.new_zeros(bboxes.size(0))
-    inds = edges1 < edges2
-    rotated_boxes = torch.stack((x_ctr, y_ctr, edges1, edges2, angles), dim=1)
-    rotated_boxes[inds, 2] = edges2[inds]
-    rotated_boxes[inds, 3] = edges1[inds]
-    rotated_boxes[inds, 4] = np.pi / 2.0
-    return rotated_boxes
-
-
-def obb2hbb_le90(obboxes):
-    """Convert oriented bounding boxes to horizontal bounding boxes.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-
-    Returns:
-        hbbs (torch.Tensor): [x_ctr,y_ctr,w,h,-pi/2]
-    """
-    center, w, h, theta = torch.split(obboxes, [2, 1, 1, 1], dim=-1)
-    Cos, Sin = torch.cos(theta), torch.sin(theta)
-    x_bias = torch.abs(w / 2 * Cos) + torch.abs(h / 2 * Sin)
-    y_bias = torch.abs(w / 2 * Sin) + torch.abs(h / 2 * Cos)
-    bias = torch.cat([x_bias, y_bias], dim=-1)
-    hbboxes = torch.cat([center - bias, center + bias], dim=-1)
-    _x = (hbboxes[..., 0] + hbboxes[..., 2]) * 0.5
-    _y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
-    _w = hbboxes[..., 2] - hbboxes[..., 0]
-    _h = hbboxes[..., 3] - hbboxes[..., 1]
-    _theta = theta.new_zeros(theta.size(0))
-    obboxes1 = torch.stack([_x, _y, _w, _h, _theta], dim=-1)
-    obboxes2 = torch.stack([_x, _y, _h, _w, _theta - np.pi / 2], dim=-1)
-    obboxes = torch.where((_w >= _h)[..., None], obboxes1, obboxes2)
-    return obboxes
-
 
 def hbb2obb_oc(hbboxes):
     """Convert horizontal bounding boxes to oriented bounding boxes.
@@ -620,48 +358,9 @@ def hbb2obb_oc(hbboxes):
     w = hbboxes[..., 2] - hbboxes[..., 0]
     h = hbboxes[..., 3] - hbboxes[..., 1]
     theta = x.new_zeros(*x.shape)
-    rbboxes = torch.stack([x, y, h, w, theta + np.pi / 2], dim=-1)
+    rbboxes = torch.stack([x, y, w, h, theta], dim=1)
     return rbboxes
 
-
-def hbb2obb_le135(hbboxes):
-    """Convert horizontal bounding boxes to oriented bounding boxes.
-
-    Args:
-        hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-
-    Returns:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-    """
-    x = (hbboxes[..., 0] + hbboxes[..., 2]) * 0.5
-    y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
-    w = hbboxes[..., 2] - hbboxes[..., 0]
-    h = hbboxes[..., 3] - hbboxes[..., 1]
-    theta = x.new_zeros(*x.shape)
-    obboxes1 = torch.stack([x, y, w, h, theta], dim=-1)
-    obboxes2 = torch.stack([x, y, h, w, theta + np.pi / 2], dim=-1)
-    obboxes = torch.where((w >= h)[..., None], obboxes1, obboxes2)
-    return obboxes
-
-
-def hbb2obb_le90(hbboxes):
-    """Convert horizontal bounding boxes to oriented bounding boxes.
-
-    Args:
-        hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-
-    Returns:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-    """
-    x = (hbboxes[..., 0] + hbboxes[..., 2]) * 0.5
-    y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
-    w = hbboxes[..., 2] - hbboxes[..., 0]
-    h = hbboxes[..., 3] - hbboxes[..., 1]
-    theta = x.new_zeros(*x.shape)
-    obboxes1 = torch.stack([x, y, w, h, theta], dim=-1)
-    obboxes2 = torch.stack([x, y, h, w, theta - np.pi / 2], dim=-1)
-    obboxes = torch.where((w >= h)[..., None], obboxes1, obboxes2)
-    return obboxes
 
 
 def obb2xyxy_oc(rbboxes):
@@ -692,46 +391,6 @@ def obb2xyxy_oc(rbboxes):
     return torch.stack((x1, y1, x2, y2), -1)
 
 
-def obb2xyxy_le135(rotatex_boxes):
-    """Convert oriented bounding boxes to horizontal bounding boxes.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-
-    Returns:
-        hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-    """
-    N = rotatex_boxes.shape[0]
-    if N == 0:
-        return rotatex_boxes.new_zeros((rotatex_boxes.size(0), 4))
-    polys = obb2poly_le135(rotatex_boxes)
-    xmin, _ = polys[:, ::2].min(1)
-    ymin, _ = polys[:, 1::2].min(1)
-    xmax, _ = polys[:, ::2].max(1)
-    ymax, _ = polys[:, 1::2].max(1)
-    return torch.stack([xmin, ymin, xmax, ymax], dim=1)
-
-
-def obb2xyxy_le90(obboxes):
-    """Convert oriented bounding boxes to horizontal bounding boxes.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-
-    Returns:
-        hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-    """
-    # N = obboxes.shape[0]
-    # if N == 0:
-    #     return obboxes.new_zeros((obboxes.size(0), 4))
-    center, w, h, theta = torch.split(obboxes, [2, 1, 1, 1], dim=-1)
-    Cos, Sin = torch.cos(theta), torch.sin(theta)
-    x_bias = torch.abs(w / 2 * Cos) + torch.abs(h / 2 * Sin)
-    y_bias = torch.abs(w / 2 * Sin) + torch.abs(h / 2 * Cos)
-    bias = torch.cat([x_bias, y_bias], dim=-1)
-    return torch.cat([center - bias, center + bias], dim=-1)
-
-
 def obb2poly_np_oc(rbboxes):
     """Convert oriented bounding boxes to polygons.
 
@@ -759,58 +418,6 @@ def obb2poly_np_oc(rbboxes):
     polys = get_best_begin_point(polys)
     return polys
 
-
-def obb2poly_np_le135(rrects):
-    """Convert oriented bounding boxes to polygons.
-
-    Args:
-        obbs (ndarray): [x_ctr,y_ctr,w,h,angle,score]
-
-    Returns:
-        polys (ndarray): [x0,y0,x1,y1,x2,y2,x3,y3,score]
-    """
-    polys = []
-    for rrect in rrects:
-        x_ctr, y_ctr, width, height, angle, score = rrect[:6]
-        tl_x, tl_y, br_x, br_y = -width / 2, -height / 2, width / 2, height / 2
-        rect = np.array([[tl_x, br_x, br_x, tl_x], [tl_y, tl_y, br_y, br_y]])
-        R = np.array([[np.cos(angle), -np.sin(angle)],
-                      [np.sin(angle), np.cos(angle)]])
-        poly = R.dot(rect)
-        x0, x1, x2, x3 = poly[0, :4] + x_ctr
-        y0, y1, y2, y3 = poly[1, :4] + y_ctr
-        poly = np.array([x0, y0, x1, y1, x2, y2, x3, y3, score],
-                        dtype=np.float32)
-        polys.append(poly)
-    polys = np.array(polys)
-    polys = get_best_begin_point(polys)
-    return polys
-
-
-def obb2poly_np_le90(obboxes):
-    """Convert oriented bounding boxes to polygons.
-
-    Args:
-        obbs (ndarray): [x_ctr,y_ctr,w,h,angle,score]
-
-    Returns:
-        polys (ndarray): [x0,y0,x1,y1,x2,y2,x3,y3,score]
-    """
-    try:
-        center, w, h, theta, score = np.split(obboxes, (2, 3, 4, 5), axis=-1)
-    except:  # noqa: E722
-        results = np.stack([0., 0., 0., 0., 0., 0., 0., 0., 0.], axis=-1)
-        return results.reshape(1, -1)
-    Cos, Sin = np.cos(theta), np.sin(theta)
-    vector1 = np.concatenate([w / 2 * Cos, w / 2 * Sin], axis=-1)
-    vector2 = np.concatenate([-h / 2 * Sin, h / 2 * Cos], axis=-1)
-    point1 = center - vector1 - vector2
-    point2 = center + vector1 - vector2
-    point3 = center + vector1 + vector2
-    point4 = center - vector1 + vector2
-    polys = np.concatenate([point1, point2, point3, point4, score], axis=-1)
-    polys = get_best_begin_point(polys)
-    return polys
 
 
 def cal_line_length(point1, point2):
@@ -889,10 +496,6 @@ def norm_angle(angle, angle_range):
     """
     if angle_range == 'oc':
         return angle
-    elif angle_range == 'le135':
-        return (angle + np.pi / 4) % np.pi - np.pi / 4
-    elif angle_range == 'le90':
-        return (angle + np.pi / 2) % np.pi - np.pi / 2
     else:
         print('Not yet implemented.')
 

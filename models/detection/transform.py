@@ -6,6 +6,7 @@ import torch
 import torchvision
 from torch import nn, Tensor
 from torchvision import transforms as T
+from torchvision.transforms import functional as TF
 from torchvision.models.detection.image_list import ImageList
 
 @torch.jit.unused
@@ -203,7 +204,8 @@ class GeneralizedRCNNTransform(nn.Module):
                 targets_copy.append(data)
             targets = targets_copy
         
-        image_transform = self.get_image_transform(self.training)
+        # image_transform = self.get_image_transform(self.training)
+        image_transform = None
         for i, image in enumerate(images):
             target = targets[i] if targets is not None else None
 
@@ -287,14 +289,17 @@ class GeneralizedRCNNTransform(nn.Module):
         direction = self.torch_choice(['horizontal', 'vertical', 'diagonal'])
         
         if direction == 'horizontal':
-            image = torch.flip(image, [1])
+            # image = torch.flip(image, [1])
+            image = TF.hflip(image)
             
         elif direction == 'vertical':
-            image = torch.flip(image, [0])
-        
+            # image = torch.flip(image, [0])
+            image = TF.vflip(image)
+             
         elif direction == 'diagonal':
-            image = torch.flip(image, [0, 1])
-
+            # image = torch.flip(image, [0, 1])
+            image = TF.vflip(TF.hflip(image))
+            
         target["bboxes"] = _flip_boxes(target["bboxes"], image.shape[-2:], direction)
         target["oboxes"] = _flip_oboxes(target["oboxes"], image.shape[-2:], direction)
         return image, target
@@ -359,12 +364,8 @@ class GeneralizedRCNNTransform(nn.Module):
         if self.training:
             return result
         for i, (pred, im_s, o_im_s) in enumerate(zip(result, image_shapes, original_image_sizes)):
-            if "bboxes" in pred:
-                result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
-            
-            if "oboxes" in pred:
-                result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
-            
+            result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
+            result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
         return result
     
     @staticmethod
