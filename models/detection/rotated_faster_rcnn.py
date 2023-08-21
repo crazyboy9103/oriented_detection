@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Dict, Union, Iterator, Callable, Any
+from typing import List, Optional, Tuple, Dict, Any, Literal
 from collections import OrderedDict
 import warnings
 
@@ -31,8 +31,7 @@ from .rpn import RPNHead, RegionProposalNetwork
 from .transform import GeneralizedRCNNTransform
 
 def _default_anchor_generator():
-    # sizes = scale x stride
-    sizes = ((32,), (64,), (128,), (256,), (512,),)
+    sizes = ((4,), (8,), (16,), (32,), (64,),)
     ratios = ((0.5, 1.0, 2.0),) * len(sizes)
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 
@@ -207,6 +206,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
                         torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(boxes)}.")
                         
                     oboxes = target["oboxes"]
+                    
                     if isinstance(oboxes, torch.Tensor):
                         torch._assert(
                             len(oboxes.shape) == 2 and oboxes.shape[-1] == 5,
@@ -255,37 +255,53 @@ class RotatedFasterRCNN(GeneralizedRCNN):
             
             return detections
     
-def rotated_fasterrcnn_resnet50_fpn_v2(
+def rotated_fasterrcnn_resnet50_fpn(
     pretrained: bool = True,
     pretrained_backbone: bool = True,
     progress: bool = True, 
     num_classes: Optional[int] = 91,
     trainable_backbone_layers: Optional[int] = None,
+    version: Literal[1, 2] = 1,
     **kwargs
 ):    
-    weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1 if pretrained else None
-    weights = FasterRCNN_ResNet50_FPN_V2_Weights.verify(weights)
+    if version == 1 and pretrained:
+        weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1
+        weights = FasterRCNN_ResNet50_FPN_Weights.verify(weights)
+    elif version == 2 and pretrained:
+        weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1
+        weights = FasterRCNN_ResNet50_FPN_V2_Weights.verify(weights)
+    else:
+        weights = None
+        
     if weights and num_classes is None:
         num_classes = len(weights.meta["categories"])
         
-    weights_backbone = ResNet50_Weights.IMAGENET1K_V1 if (pretrained_backbone and weights is None) else None
+    weights_backbone = ResNet50_Weights.IMAGENET1K_V1 if pretrained_backbone else None
     weights_backbone = ResNet50_Weights.verify(weights_backbone)
     
     
+    is_backbone_trained = weights_backbone is not None
+    is_faster_rcnn_trained = weights is not None
     
-    is_trained = weights is not None or weights_backbone is not None
-    norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_trained else nn.BatchNorm2d
+    backbone_norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_backbone_trained else nn.BatchNorm2d
+    fast_rcnn_norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_faster_rcnn_trained else nn.BatchNorm2d
     
-    trainable_backbone_layers = _validate_trainable_layers(is_trained, trainable_backbone_layers, max_value=5, default_value=3)
+    trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=5, default_value=3)
 
     backbone = resnet50(weights=weights_backbone, progress=progress)
-    backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, [1, 2, 3, 4], norm_layer=norm_layer)
+    backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, [1, 2, 3, 4], norm_layer=backbone_norm_layer)
     
     rpn_anchor_generator = _default_anchor_generator()
-    rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)
-    box_head = FastRCNNConvFCHead(
-        (backbone.out_channels, 7, 7), [256, 256], [1024], norm_layer=norm_layer
-    )
+    
+    if version == 1:
+        rpn_head = None
+        box_head = None
+        
+    elif version == 2:
+        rpn_head = RPNHead(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)
+        box_head = FastRCNNConvFCHead(
+            (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
+        )
     
     model = RotatedFasterRCNN(
         backbone,
@@ -296,7 +312,24 @@ def rotated_fasterrcnn_resnet50_fpn_v2(
         **kwargs,
     )
 
-    if weights and num_classes is None:
-        model.load_state_dict(weights.get_state_dict(progress=progress), strict=False)
+    if weights:
+        model_state_dict = model.state_dict()
+        trained_state_dict = weights.get_state_dict(progress=progress)
+        for k, tensor in model_state_dict.items():
+            trained_tensor = trained_state_dict.get(k, None)
+            if trained_tensor is not None:
+                if tensor.shape == trained_tensor.shape:
+                    model_state_dict[k] = trained_tensor
+                else:
+                    print(f"Skipped loading parameter {k} due to incompatible shapes: {tensor.shape} vs {trained_tensor.shape}")
+            else:
+                print(f"Skipped loading parameter {k} which is not in the model's state dict.")
 
+        model.load_state_dict(model_state_dict, strict=False)
+        
+        if version == 1 and weights == FasterRCNN_ResNet50_FPN_Weights.COCO_V1:
+            for module in model.modules():
+                if isinstance(module, misc_nn_ops.FrozenBatchNorm2d):
+                    module.eps = 0.0
+            
     return model
