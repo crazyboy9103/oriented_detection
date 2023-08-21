@@ -46,6 +46,12 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
     N, num_classes = class_logits.shape
     
     labels = torch.cat(labels, dim=0)
+    try:
+        # classification_loss = F.cross_entropy(class_logits, labels)
+        classification_loss = FocalLoss()(class_logits, labels)
+    except:
+        classification_loss = torch.tensor(0.0)
+        
     pos_inds = torch.where(labels > 0)[0]
     labels_pos = labels[pos_inds]
     hbox_regression_targets = torch.cat(hbox_regression_targets, dim=0)
@@ -60,20 +66,16 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
         box_loss = F.smooth_l1_loss(
             regression[pos_inds, labels_pos],
             regression_targets[pos_inds],
-            beta=1.0,
-            reduction="sum",
+            beta=1.0 / 9,
+            reduction="mean",
         )
-        box_loss = box_loss / labels.numel()
+        # box_loss = box_loss / labels.numel()
         return box_loss
     # Compute for horizontal branch 
     hbox_loss = compute_box_loss(hbox_regression, hbox_regression_targets, horizontal=True)
     # Compute for rotated branch
     obox_loss = compute_box_loss(obox_regression, obox_regression_targets, horizontal=False)
-    try:
-        # classification_loss = F.cross_entropy(class_logits, labels)
-        classification_loss = FocalLoss()(class_logits, labels)
-    except:
-        classification_loss = torch.tensor(0.0)
+    
         
     return classification_loss, hbox_loss, obox_loss
 
@@ -131,7 +133,6 @@ class RoIHeads(nn.Module):
         
         self.nms_thresh_rotated = nms_thresh_rotated
 
-    @torch.no_grad()
     def assign_targets_to_proposals(self, proposals: List[Tensor], gt_boxes: List[Tensor], gt_labels: List[Tensor], horizontal=True) -> Tuple[List[Tensor], List[Tensor]]:
         matched_idxs = []
         labels = []
@@ -197,7 +198,6 @@ class RoIHeads(nn.Module):
         if not all(["labels" in t for t in targets]):
             raise ValueError("Every element of targets should have a labels key")
 
-    @torch.no_grad()
     def select_training_samples(
         self,
         proposals: List[Tensor],
@@ -216,11 +216,12 @@ class RoIHeads(nn.Module):
         # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
         # append ground-truth bboxes to proposals for classifier 
         # (box regressor does not obtain any gradients from them)
-        proposals = self.add_gt_proposals(proposals, gt_boxes)
+        if self.training:
+            proposals = self.add_gt_proposals(proposals, gt_boxes)
         
         # get matching gt indices for each proposal
         # horizontal: using horizontal or rotated boxes for matching
-        matched_idxs, labels = self.assign_targets_to_proposals(proposals, gt_oboxes, gt_labels, horizontal=False)
+        matched_idxs, labels = self.assign_targets_to_proposals(proposals, gt_boxes, gt_labels, horizontal=True)
         # sample a fixed proportion of positive-negative proposals
         sampled_idxs = self.subsample(labels)
         

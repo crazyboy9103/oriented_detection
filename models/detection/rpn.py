@@ -349,20 +349,19 @@ class RegionProposalNetwork(nn.Module):
         sampled_neg_inds = torch.where(torch.cat(sampled_neg_inds, dim=0))[0]
 
         sampled_inds = torch.cat([sampled_pos_inds, sampled_neg_inds], dim=0)
-
-
-        regression_targets = torch.cat(regression_targets, dim=0)
-        box_loss = F.smooth_l1_loss(
-            pred_bbox_deltas[sampled_pos_inds],
-            regression_targets[sampled_pos_inds],
-            beta=1.0,
-            reduction="sum",
-        ) / (sampled_inds.numel())
         
         objectness = objectness.flatten()
         labels = torch.cat(labels, dim=0)
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[sampled_inds], labels[sampled_inds])
 
+        regression_targets = torch.cat(regression_targets, dim=0)
+        box_loss = F.smooth_l1_loss(
+            pred_bbox_deltas[sampled_pos_inds],
+            regression_targets[sampled_pos_inds],
+            beta=1.0 / 9,
+            reduction="sum",
+        ) / (sampled_inds.numel())
+        
         return objectness_loss, box_loss
 
     def forward(
