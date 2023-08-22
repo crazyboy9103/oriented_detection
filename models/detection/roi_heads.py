@@ -2,9 +2,7 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
-import torchvision
 from torch import nn, Tensor
-from torchvision.ops import roi_align
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
@@ -349,7 +347,8 @@ class RoIHeads(nn.Module):
         proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets = self.select_training_samples(proposals, targets)
         # Horizontal ROI Pooling
         box_features = self.box_roi_pool(features, proposals, image_shapes)
-        box_features = self.box_head(box_features)
+        if self.box_head:
+            box_features = self.box_head(box_features)
         class_logits, hbox_regression, obox_regression = self.box_predictor(box_features)
         
         result: List[Dict[str, torch.Tensor]] = []

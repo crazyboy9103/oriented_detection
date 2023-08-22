@@ -110,7 +110,7 @@ class BaseDataset(Dataset):
                             # Weird error in DOTA dataset, skip this instance
                             print(obb, hbb)
                             continue
-                    except:  # noqa: E722
+                    except:
                         continue
                     
                     difficulty = int(bbox_info[9])

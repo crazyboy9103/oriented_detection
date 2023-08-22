@@ -1,4 +1,5 @@
 # https://gaussian37.github.io/dl-pytorch-lr_scheduler/#cosineannealingwarmrestarts-1
+# https://gaussian37.github.io/assets/img/dl/pytorch/lr_scheduler/13.png
 import math
 from torch.optim.lr_scheduler import _LRScheduler
 

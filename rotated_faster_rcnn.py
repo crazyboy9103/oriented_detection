@@ -10,7 +10,7 @@ import wandb
 from datasets.dota import DotaDataset
 from datasets.mvtec import MVTecDataset
 from models.detection.rotated_faster_rcnn import rotated_fasterrcnn_resnet50_fpn
-from scheduler import CosineAnnealingWarmUpRestartsDecay
+from scheduler import CosineAnnealingWarmUpRestartsDecay, LinearWarmUpMultiStepDecay
 from evaluation.evaluator import eval_rbbox_map
 from visualize_utils import plot_image
 
@@ -30,13 +30,13 @@ class DotaDataConfig:
 
 @dataclass
 class TrainConfig:
-    pretrained: bool = False
+    pretrained: bool = True
     pretrained_backbone: bool = True
     progress: bool = True
     num_classes: int = 13 + 1
-    trainable_backbone_layers: Literal[0, 1, 2, 3, 4, 5] = 3
+    trainable_backbone_layers: Literal[0, 1, 2, 3, 4, 5] = 4
     version: Literal[1, 2] = 2 # TODO: version 1
-    learning_rate: float = 0.0001
+    learning_rate: float = 0.001
 
 @dataclass
 class RotatedFasterRCNNConfig:
@@ -47,16 +47,16 @@ class RotatedFasterRCNNConfig:
     image_std: Optional[Tuple[float, float, float]] = None
     # RPN parameters
     rpn_pre_nms_top_n_train: int = 2000
-    rpn_pre_nms_top_n_test: int = 1000
+    rpn_pre_nms_top_n_test: int = 2000
     rpn_post_nms_top_n_train: int = 2000
-    rpn_post_nms_top_n_test: int = 1000
+    rpn_post_nms_top_n_test: int = 2000
     rpn_nms_thresh: float = 0.7
     rpn_fg_iou_thresh: float = 0.7
     rpn_bg_iou_thresh: float = 0.3
     rpn_batch_size_per_image: int = 256
     rpn_positive_fraction: float = 0.5
     rpn_score_thresh: float = 0.0
-    # Box parameters
+    # R-CNN parameters
     box_score_thresh: float = 0.05
     box_nms_thresh: float = 0.5
     box_detections_per_img: int = 100
@@ -70,17 +70,36 @@ class RotatedFasterRCNNConfig:
 
 
 class RotatedFasterRCNN(LightningModule):
-    def __init__(self):
-        super(RotatedFasterRCNN, self).__init__()
-        self.train_config = TrainConfig()
-        self.rfrcnn_config = RotatedFasterRCNNConfig(**asdict(MvtecDataConfig()))
+    def __init__(self, config: Optional[dict] = None):
+        super(RotatedFasterRCNN, self).__init__()       
+        self.train_config = asdict(TrainConfig())
+        
+        data_config = asdict(MvtecDataConfig())
+        self.rfrcnn_config = asdict(RotatedFasterRCNNConfig(**data_config))
 
-        self.model = rotated_fasterrcnn_resnet50_fpn(**asdict(self.train_config), **asdict(self.rfrcnn_config))
+        if config:
+            config = self._parse_config(config)
+            self.train_config.update({k: v for k, v in config.items() if k in self.train_config})
+            self.rfrcnn_config.update({k: v for k, v in config.items() if k in self.rfrcnn_config})
+            
+        self.model = rotated_fasterrcnn_resnet50_fpn(**self.train_config, **self.rfrcnn_config)
         self.lr = self.train_config.learning_rate
 
         self.outputs = []
         self.targets = []
-
+    
+    def _parse_config(self, config):
+        # Avoid in place modification
+        config = dict(config.items())
+        for k, v in config.items():
+            if k in ("pretrained", "pretrained_backbone"):
+                config[k] = bool(v)
+        return config
+                
+    def setup(self, stage: Optional[str] = None):
+        self.logger.experiment.config.update(self.train_config)
+        self.logger.experiment.config.update(self.rfrcnn_config)
+        
     def put_outputs(self, outputs):
         # [[cls 1, cls 2 ... cls 13], [(img2)...]]
         for output in outputs:
@@ -145,7 +164,8 @@ class RotatedFasterRCNN(LightningModule):
         #     0.5,
         #     True
         # )
-        # print(map)
+        # self.outputs = []
+        # self.targets = []
         pass
         
         
@@ -154,5 +174,13 @@ class RotatedFasterRCNN(LightningModule):
         # optimizer = optim.SGD(self.parameters(), lr=self.lr, momentum=0.9, weight_decay=1e-4)
         # return optimizer
         # scheduler = CosineAnnealingWarmUpRestartsDecay(optimizer, T_0=500, T_mult=1, eta_max=self.lr,  T_up=10, gamma=0.9)
-        scheduler = StepLR(optimizer, step_size=5000, gamma=0.5)
-        return [optimizer], [scheduler]
+        # scheduler = StepLR(optimizer, step_size=500, gamma=0.5)
+        # TODO this is just roughly calculated
+        steps_per_epoch = 180
+        start, end = steps_per_epoch * 20, steps_per_epoch * 22
+        scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[start, end], gamma=1/3, warmup_iters=500)
+        scheduler_config = {
+            "scheduler": scheduler,
+            "interval": "step",
+        }
+        return [optimizer], [scheduler_config]

@@ -206,7 +206,6 @@ class RotatedFasterRCNN(GeneralizedRCNN):
                         torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(boxes)}.")
                         
                     oboxes = target["oboxes"]
-                    
                     if isinstance(oboxes, torch.Tensor):
                         torch._assert(
                             len(oboxes.shape) == 2 and oboxes.shape[-1] == 5,
@@ -284,7 +283,7 @@ def rotated_fasterrcnn_resnet50_fpn(
     is_faster_rcnn_trained = weights is not None
     
     backbone_norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_backbone_trained else nn.BatchNorm2d
-    fast_rcnn_norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_faster_rcnn_trained else nn.BatchNorm2d
+    fast_rcnn_norm_layer = nn.BatchNorm2d # misc_nn_ops.FrozenBatchNorm2d if is_faster_rcnn_trained else nn.BatchNorm2d
     
     trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=5, default_value=3)
 
