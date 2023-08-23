@@ -81,9 +81,10 @@ class RotatedFasterRCNN(LightningModule):
         self.kwargs = asdict(Kwargs())
         
         if config:
-            config = self._parse_config(config)
-            self.train_config.update({k: v for k, v in config.items() if k in self.train_config})
-            self.rfrcnn_config.update({k: v for k, v in config.items() if k in self.rfrcnn_config})
+            self.config = self._parse_config(config)
+            self.train_config.update({k: v for k, v in self.config.items() if k in self.train_config})
+            self.rfrcnn_config.update({k: v for k, v in self.config.items() if k in self.rfrcnn_config})
+            self.kwargs.update({k: v for k, v in self.config.items() if k in self.kwargs})
             
         self.model = rotated_fasterrcnn_resnet50_fpn(**self.train_config, **self.rfrcnn_config, kwargs=self.kwargs)
         self.lr = self.train_config['learning_rate']
@@ -96,13 +97,14 @@ class RotatedFasterRCNN(LightningModule):
         # As wandb config does not accept boolean values, must be manually converted
         config = dict(config.items())
         for k, v in config.items():
-            if k in ("pretrained", "pretrained_backbone"):
+            if k in ("pretrained", "pretrained_backbone", "_skip_flip", "_skip_image_transform"):
                 config[k] = bool(v)
         return config
                 
     def setup(self, stage: Optional[str] = None):
         self.logger.experiment.config.update(self.train_config)
         self.logger.experiment.config.update(self.rfrcnn_config)
+        self.logger.experiment.config.update(self.kwargs)
         
     def put_outputs(self, outputs):
         # [[cls 1, cls 2 ... cls 13], [(img2)...]]
@@ -150,7 +152,7 @@ class RotatedFasterRCNN(LightningModule):
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
         self.log('valid-loss', loss)
-        if batch_idx == 0:
+        if not hasattr(self, 'config') and batch_idx == 0:
             self.logger.experiment.log({
                 "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
                         for pil_image, image_path in (plot_image(image, output, target, data=MVTecDataset) for image, output, target in zip(images, outputs, targets))]

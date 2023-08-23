@@ -56,17 +56,17 @@ def main(args):
         log_model=True,
         save_dir="."
     )
-    logger.watch(model, log='gradients', log_freq=500, log_graph=True)
+    # logger.watch(model, log='gradients', log_freq=500, log_graph=True)
     
     
     callbacks = [
-        ModelCheckpoint(dirpath=args.checkpoint_path, save_top_k=2, monitor="valid-loss", mode="min"),
+        # ModelCheckpoint(dirpath=args.checkpoint_path, save_top_k=2, monitor="valid-loss", mode="min"),
         LearningRateMonitor(logging_interval='step')
     ]
     
     trainer = pl.Trainer(
         logger=logger, 
-        max_epochs=config.num_epochs,
+        max_epochs=args.num_epochs,
         gradient_clip_val=args.gradient_clip_val, 
         precision=args.precision,
         benchmark=True,
@@ -95,6 +95,7 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoint_path', type=str, default='./checkpoints')
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--gradient_clip_val', type=float, default=35)
+    parser.add_argument('--num_epochs', type=int, default=24)
     args = parser.parse_args()
     
     sweep_config = {
@@ -105,8 +106,7 @@ if __name__ == '__main__':
             'name': 'valid-loss'
         },
         'parameters': {
-            'batch_size': {'values': [2, 4, 8]},
-            'num_epochs': {'values': [12, 24, 36, 48, 60]},
+            'batch_size': {'values': [2, 4]},
             'trainable_backbone_layers': {'values': [0, 1, 2, 3, 4, 5]},
             'learning_rate': {
                 'min': 0.00001,
@@ -115,8 +115,10 @@ if __name__ == '__main__':
             },
             'pretrained_backbone': {'values': [0, 1]},
             'pretrained': {'values': [0, 1]},
-            'box_positive_fraction': {'values': [0.25, 0.5, 0.75]},
-            'box_detections_per_img': {'values': [100, 200, 300]},
+            '_skip_flip': {'values': [0, 1]},
+            '_skip_image_transform': {'values': [0, 1]},
+            'box_positive_fraction': {'values': [0.25, 0.5]},
+            'box_detections_per_img': {'values': [100, 200]},
         }
     }
     sweep_id=wandb.sweep(sweep_config, project=args.project_name)
