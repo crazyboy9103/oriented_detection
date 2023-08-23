@@ -202,52 +202,63 @@ class RoIHeads(nn.Module):
         targets : Optional[List[Dict[str, Tensor]]]
     ):
         # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
+        # Avoid in-place operation
+        proposals = [proposal.clone() for proposal in proposals]
+        
         self.check_targets(targets)
 
         dtype = proposals[0].dtype
-        device = proposals[0].device
 
         gt_boxes = [t["bboxes"].to(dtype) for t in targets]
-        gt_oboxes = [t["oboxes"].to(dtype) for t in targets]
         gt_labels = [t["labels"] for t in targets]
 
-        # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
-        # append ground-truth bboxes to proposals for classifier 
-        # (box regressor does not obtain any gradients from them)
         if self.training:
             proposals = self.add_gt_proposals(proposals, gt_boxes)
-        
+            
         # get matching gt indices for each proposal
         # horizontal: using horizontal or rotated boxes for matching
         matched_idxs, labels = self.assign_targets_to_proposals(proposals, gt_boxes, gt_labels, horizontal=True)
+        
         # sample a fixed proportion of positive-negative proposals
         sampled_idxs = self.subsample(labels)
-        
+        return proposals, labels, matched_idxs, sampled_idxs
+    
+    def filter_training_samples(
+            self,
+            proposals,
+            labels,
+            matched_idxs,
+            sampled_idxs,
+            targets
+        ):
+        dtype = proposals[0].dtype
+        device = proposals[0].device
+         # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
+        # append ground-truth bboxes to proposals for classifier 
+        # (box regressor does not obtain any gradients from them)
         matched_gt_hboxes = []
         matched_gt_oboxes = []
-        num_images = len(proposals)
-        for img_id in range(num_images):
-            img_sampled_idxs = sampled_idxs[img_id]
-            
+        gt_boxes = [t["bboxes"].to(dtype) for t in targets]
+        gt_oboxes = [t["oboxes"].to(dtype) for t in targets]
+        
+        for img_id, img_sampled_idxs in enumerate(sampled_idxs):
             proposals[img_id] = proposals[img_id][img_sampled_idxs]
             labels[img_id] = labels[img_id][img_sampled_idxs]
-            matched_idxs[img_id] = matched_idxs[img_id][img_sampled_idxs]
             
-            gt_hboxes_in_image = gt_boxes[img_id]
-            gt_oboxes_in_image = gt_oboxes[img_id]
-
-            if gt_hboxes_in_image.numel() == 0:
-                gt_hboxes_in_image = torch.zeros((1, 4), dtype=dtype, device=device)
-            if gt_oboxes_in_image.numel() == 0:
-                gt_oboxes_in_image = torch.zeros((1, 5), dtype=dtype, device=device)
+            img_gt_hboxes = gt_boxes[img_id]
+            if img_gt_hboxes.numel() == 0:
+                img_gt_hboxes = torch.zeros((1, 4), dtype=dtype, device=device)
                 
-            matched_gt_hboxes.append(gt_hboxes_in_image[matched_idxs[img_id]])
-            matched_gt_oboxes.append(gt_oboxes_in_image[matched_idxs[img_id]])
-        
+            img_gt_oboxes = gt_oboxes[img_id]
+            if img_gt_oboxes.numel() == 0:
+                img_gt_oboxes = torch.zeros((1, 5), dtype=dtype, device=device)
+                
+            matched_gt_hboxes.append(img_gt_hboxes[matched_idxs[img_id][img_sampled_idxs]])
+            matched_gt_oboxes.append(img_gt_oboxes[matched_idxs[img_id][img_sampled_idxs]])
         
         horizontal_regression_targets = self.box_coder.encode(matched_gt_hboxes, proposals)
         rotated_regression_targets = self.hbox_coder.encode(matched_gt_oboxes, proposals)
-        return proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets
+        return proposals, labels, horizontal_regression_targets, rotated_regression_targets
     
     def postprocess_detections(
         self,
@@ -344,22 +355,38 @@ class RoIHeads(nn.Module):
                 if not t["labels"].dtype == torch.int64:
                     raise TypeError(f"target labels must of int64 type, instead got {t['labels'].dtype}")
 
-        proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets = self.select_training_samples(proposals, targets)
-        # Horizontal ROI Pooling
-        box_features = self.box_roi_pool(features, proposals, image_shapes)
-        if self.box_head:
-            box_features = self.box_head(box_features)
-        class_logits, hbox_regression, obox_regression = self.box_predictor(box_features)
+        temp_proposals, temp_labels, matched_idxs, sampled_idxs = self.select_training_samples(proposals, targets)
+        train_proposals, train_labels, horizontal_regression_targets, rotated_regression_targets = self.filter_training_samples(temp_proposals, temp_labels, matched_idxs, sampled_idxs, targets)
+        # proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets = self.select_training_samples(proposals, targets)
+            
+        
         
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
         if self.training:
-            if labels is None:
+            if train_labels is None:
                 raise ValueError("labels cannot be None")
             
             if horizontal_regression_targets is None or rotated_regression_targets is None:
                 raise ValueError("regression_targets cannot be None")
+            
+            # Horizontal ROI Pooling
+            box_features = self.box_roi_pool(features, train_proposals, image_shapes)
+            # Shared head 
+            box_features = self.box_head(box_features)
+            class_logits, hbox_regression, obox_regression = self.box_predictor(box_features)
+            
+            loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(
+                class_logits, hbox_regression, obox_regression,
+                train_labels, horizontal_regression_targets, rotated_regression_targets
+            )
         else:
+            # Horizontal ROI Pooling
+            box_features = self.box_roi_pool(features, proposals, image_shapes)
+            # Shared head 
+            box_features = self.box_head(box_features)
+            class_logits, hbox_regression, obox_regression = self.box_predictor(box_features)
+            
             hboxes, hscores, hlabels = self.postprocess_detections(class_logits, hbox_regression, proposals, image_shapes, horizontal=True)
             oboxes, oscores, olabels = self.postprocess_detections(class_logits, obox_regression, proposals, image_shapes, horizontal=False)
             for i in range(len(hboxes)):
@@ -374,11 +401,28 @@ class RoIHeads(nn.Module):
                         "oscores": oscores[i],
                     }
                 )
+    
+            # print("class_logits", class_logits.shape)
+            # print("sampled_idxs", sampled_idxs)
+            valid_logits = []
+            valid_hbox = []
+            valid_obox = []
+            for img_id, img_sampled_idxs in enumerate(sampled_idxs):
+                mapped_idxs = (img_id + 1) * img_sampled_idxs
+                valid_logits.append(class_logits[mapped_idxs])
+                valid_hbox.append(hbox_regression[mapped_idxs])
+                valid_obox.append(obox_regression[mapped_idxs])
+
+            valid_logits = torch.cat(valid_logits)
+            valid_hbox = torch.cat(valid_hbox)
+            valid_obox = torch.cat(valid_obox)
+            
+            loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(
+                valid_logits, valid_hbox, valid_obox,
+                train_labels, horizontal_regression_targets, rotated_regression_targets
+            )
+
         
-        loss_classifier, loss_box_reg, loss_obox_reg = rotated_fastrcnn_loss(
-            class_logits, hbox_regression, obox_regression,
-            labels, horizontal_regression_targets, rotated_regression_targets
-        )
         losses = {
             "loss_classifier": loss_classifier, 
             "loss_box_reg": loss_box_reg, 

@@ -36,7 +36,7 @@ class TrainConfig:
     num_classes: int = 13 + 1
     trainable_backbone_layers: Literal[0, 1, 2, 3, 4, 5] = 4
     version: Literal[1, 2] = 2 # TODO: version 1
-    learning_rate: float = 0.001
+    learning_rate: float = 0.0001
 
 @dataclass
 class RotatedFasterRCNNConfig:
@@ -59,15 +59,17 @@ class RotatedFasterRCNNConfig:
     # R-CNN parameters
     box_score_thresh: float = 0.05
     box_nms_thresh: float = 0.5
-    box_detections_per_img: int = 100
+    box_detections_per_img: int = 100 # 200
     box_fg_iou_thresh: float = 0.5
     box_bg_iou_thresh: float = 0.5
     box_batch_size_per_image: int = 512
     box_positive_fraction: float = 0.25
     bbox_reg_weights: Optional[Tuple[float, float, float, float, float]] = (10, 10, 5, 5, 10)
 
-
-
+@dataclass
+class Kwargs:
+    _skip_flip: bool = False
+    _skip_image_transform: bool = False
 
 class RotatedFasterRCNN(LightningModule):
     def __init__(self, config: Optional[dict] = None):
@@ -76,13 +78,14 @@ class RotatedFasterRCNN(LightningModule):
         
         data_config = asdict(MvtecDataConfig())
         self.rfrcnn_config = asdict(RotatedFasterRCNNConfig(**data_config))
-
+        self.kwargs = asdict(Kwargs())
+        
         if config:
             config = self._parse_config(config)
             self.train_config.update({k: v for k, v in config.items() if k in self.train_config})
             self.rfrcnn_config.update({k: v for k, v in config.items() if k in self.rfrcnn_config})
             
-        self.model = rotated_fasterrcnn_resnet50_fpn(**self.train_config, **self.rfrcnn_config)
+        self.model = rotated_fasterrcnn_resnet50_fpn(**self.train_config, **self.rfrcnn_config, kwargs=self.kwargs)
         self.lr = self.train_config['learning_rate']
 
         self.outputs = []
@@ -90,6 +93,7 @@ class RotatedFasterRCNN(LightningModule):
     
     def _parse_config(self, config):
         # Avoid in place modification
+        # As wandb config does not accept boolean values, must be manually converted
         config = dict(config.items())
         for k, v in config.items():
             if k in ("pretrained", "pretrained_backbone"):
@@ -141,16 +145,16 @@ class RotatedFasterRCNN(LightningModule):
         loss_dict, outputs = self(images, targets)
         
         # TODO use evaluation metric mAP to save best model
-        loss = sum(loss.detach().item() for loss in loss_dict.values())
+        loss = sum(loss.item() for loss in loss_dict.values())
         
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
         self.log('valid-loss', loss)
-        # if batch_idx == 0:
-        #     self.logger.experiment.log({
-        #         "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
-        #                 for pil_image, image_path in (plot_image(image, output, target, data=MVTecDataset) for image, output, target in zip(images, outputs, targets))]
-        #     })
+        if batch_idx == 0:
+            self.logger.experiment.log({
+                "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
+                        for pil_image, image_path in (plot_image(image, output, target, data=MVTecDataset) for image, output, target in zip(images, outputs, targets))]
+            })
             
         # self.put_outputs(outputs)
         # self.put_targets(targets)

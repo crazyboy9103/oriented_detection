@@ -14,7 +14,7 @@ FONT = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans-Bold.ttf')
 FONT = ImageFont.truetype(FONT, size=8)
 ANCHOR_TYPE = 'lt'
 
-def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: Union[MVTecDataset, DotaDataset]):
+def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: MVTecDataset|DotaDataset, h_score_threshold: float = 0.3, o_score_threshold: float = 0.3):
     image = to_pil_image(image)
     draw = ImageDraw.Draw(image)
 
@@ -22,7 +22,7 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
         dt_hboxes = output['bboxes']
         dt_hlabels = output['labels']
         dt_hscores = output['scores']
-        hmask = dt_hscores > 0.5
+        hmask = dt_hscores > h_score_threshold
         dt_hboxes = dt_hboxes[hmask].cpu().tolist()
         dt_hlabels = dt_hlabels[hmask].cpu().tolist()
         dt_hscores = dt_hscores[hmask].cpu().tolist()
@@ -42,7 +42,7 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
         dt_oboxes = output['oboxes']
         dt_olabels = output['olabels']
         dt_oscores = output['oscores']
-        omask = dt_oscores > 0.1
+        omask = dt_oscores > o_score_threshold
 
         dt_oboxes = dt_oboxes[omask].cpu()
         dt_opolys = obb2poly(dt_oboxes).to(int).tolist()

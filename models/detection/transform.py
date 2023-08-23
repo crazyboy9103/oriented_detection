@@ -184,8 +184,9 @@ class GeneralizedRCNNTransform(nn.Module):
         self.image_std = image_std
         self.size_divisible = size_divisible
         self.fixed_size = fixed_size
-        self._skip_resize = kwargs.pop("_skip_resize", False),
-        self._skip_flip = kwargs.pop("_skip_flip", False),
+        self._skip_resize = kwargs.pop("_skip_resize", False)
+        self._skip_flip = kwargs.pop("_skip_flip", False)
+        self._skip_image_transform = kwargs.pop("_skip_image_transform", False)
 
     def forward(
         self, images: List[Tensor], targets: Optional[List[Dict[str, Tensor]]] = None
@@ -212,11 +213,13 @@ class GeneralizedRCNNTransform(nn.Module):
             if image.dim() != 3:
                 raise ValueError(f"images is expected to be a list of 3d tensors of shape [C, H, W], got {image.shape}")
             
-            if image_transform:
+            if not self._skip_image_transform and image_transform:
                 image = image_transform(image)
            
             image, target = self.resize(image, target)
-            image, target = self.flip_bboxes(image, target)
+            
+            if not self._skip_flip and self.training:
+                image, target = self.flip_bboxes(image, target)
             
             image = self.normalize(image)
             

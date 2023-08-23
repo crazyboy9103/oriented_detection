@@ -33,8 +33,8 @@ def main(args):
         datamodule = MVTecDataModule(
             "oc", 
             "xyxy", 
-            "/workspace/datasets/mvtec.pth", 
-            "/datasets/split_ss_mvtec", 
+            "./datasets/mvtec.pth", 
+            "/mnt/d/datasets/split_ss_mvtec", 
             train_loader_kwargs, 
             test_loader_kwargs
         )
