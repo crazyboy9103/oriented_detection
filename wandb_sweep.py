@@ -9,44 +9,40 @@ from rotated_faster_rcnn import RotatedFasterRCNN
 from datasets.mvtec import MVTecDataModule
 from datasets.dota import DotaDataModule
 
-def main():
+def main(args):
     wandb.init(project="sweep")
     config = wandb.config
     
     train_loader_kwargs = dict(
         batch_size=config.batch_size, 
-        num_workers=config.num_workers, 
+        num_workers=args.num_workers, 
         shuffle=True, 
         pin_memory=True
     )
     test_loader_kwargs = dict(
         batch_size=config.batch_size, 
-        num_workers=config.num_workers, 
+        num_workers=args.num_workers, 
         shuffle=False, 
         pin_memory=True
     )
 
-    if config.dataset == 'dota':
+    if args.dataset == 'dota':
         raise NotImplementedError
     
-    elif config.dataset == 'mvtec':
+    elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
             "oc", 
             "xyxy", 
             "/workspace/datasets/mvtec.pth", 
-            config.data_path, 
+            args.data_path, 
             train_loader_kwargs, 
             test_loader_kwargs
         )
-    
-    
-    
-
 #     wandb.require(experiment="service")
 
-    if config.model_type == 'rotated':
+    if args.model_type == 'rotated':
         model = RotatedFasterRCNN(config)
-    elif config.model_type == 'oriented':
+    elif args.model_type == 'oriented':
         # model = OrientedRCNN()
         raise NotImplementedError
     else:
@@ -55,8 +51,8 @@ def main():
     
     # arguments made to CometLogger are passed on to the comet_ml.Experiment class
     logger = WandbLogger(
-        project=config.project_name,
-        name=config.experiment_name,
+        project=args.project_name,
+        name=args.experiment_name,
         log_model=True,
         save_dir="."
     )
@@ -64,15 +60,15 @@ def main():
     
     
     callbacks = [
-        ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-loss", mode="min"),
+        ModelCheckpoint(dirpath=args.checkpoint_path, save_top_k=2, monitor="valid-loss", mode="min"),
         LearningRateMonitor(logging_interval='step')
     ]
     
     trainer = pl.Trainer(
         logger=logger, 
         max_epochs=config.num_epochs,
-        gradient_clip_val=config.gradient_clip_val, 
-        precision=config.precision,
+        gradient_clip_val=args.gradient_clip_val, 
+        precision=args.precision,
         benchmark=True,
         deterministic=True,
         profiler="pytorch",
@@ -95,6 +91,10 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type=str, default='/default/datasets/mvtec-rotated-screws')
     parser.add_argument('--sweep_name', type=str, default='first_sweep')
     parser.add_argument('--sweep_method', type=str, default='random', choices=['random', 'grid', 'bayes'])
+    parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--checkpoint_path', type=str, default='./checkpoints')
+    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--gradient_clip_val', type=float, default=35)
     args = parser.parse_args()
     
     sweep_config = {
@@ -105,18 +105,14 @@ if __name__ == '__main__':
             'name': 'valid-loss'
         },
         'parameters': {
-            'model_type': args.model_type, 
-            'dataset': args.dataset,
-            'project_name': args.project_name,
-            'experiment_name': args.experiment_name,
-            'gradient_clip_val': 35.0, 
-            'num_workers': 8,
-            'precision': '32-true', # | bf16 | bf16-mixed | 16 | 16-mixed | 32 | 32-true | 64 | 64-true
-            'data_path': args.data_path,
-            'batch_size': [2, 4, 8, 16, 32],
-            'num_epochs': [12, 24, 36, 48, 60],
+            'batch_size': {'values': [2, 4, 8]},
+            'num_epochs': {'values': [12, 24, 36, 48, 60]},
             'trainable_backbone_layers': {'values': [0, 1, 2, 3, 4, 5]},
-            'learning_rate': {'max': 1.0, 'min': 0.00001},
+            'learning_rate': {
+                'min': 0.00001,
+                'max': 0.1,
+                'distribution': 'uniform'
+            },
             'pretrained_backbone': {'values': [0, 1]},
             'pretrained': {'values': [0, 1]},
             'box_positive_fraction': {'values': [0.25, 0.5, 0.75]},
@@ -124,5 +120,5 @@ if __name__ == '__main__':
         }
     }
     sweep_id=wandb.sweep(sweep_config, project=args.project_name)
-    wandb.agent(sweep_id=sweep_id, function=main, count=5)
+    wandb.agent(sweep_id=sweep_id, function=lambda: main(args), count=5)
     

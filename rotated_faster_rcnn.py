@@ -83,7 +83,7 @@ class RotatedFasterRCNN(LightningModule):
             self.rfrcnn_config.update({k: v for k, v in config.items() if k in self.rfrcnn_config})
             
         self.model = rotated_fasterrcnn_resnet50_fpn(**self.train_config, **self.rfrcnn_config)
-        self.lr = self.train_config.learning_rate
+        self.lr = self.train_config['learning_rate']
 
         self.outputs = []
         self.targets = []
@@ -146,11 +146,11 @@ class RotatedFasterRCNN(LightningModule):
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
         self.log('valid-loss', loss)
-        if batch_idx == 0:
-            self.logger.experiment.log({
-                "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
-                        for pil_image, image_path in (plot_image(image, output, target, data=MVTecDataset) for image, output, target in zip(images, outputs, targets))]
-            })
+        # if batch_idx == 0:
+        #     self.logger.experiment.log({
+        #         "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
+        #                 for pil_image, image_path in (plot_image(image, output, target, data=MVTecDataset) for image, output, target in zip(images, outputs, targets))]
+        #     })
             
         # self.put_outputs(outputs)
         # self.put_targets(targets)
