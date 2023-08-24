@@ -1,14 +1,13 @@
 import argparse
 
 import pytorch_lightning as pl
-# from oriented_rcnn import OrientedRCNN
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
+# from oriented_rcnn import OrientedRCNN
 from rotated_faster_rcnn import RotatedFasterRCNN
 from datasets.mvtec import MVTecDataModule
 from datasets.dota import DotaDataModule
-
 
 
 
@@ -27,7 +26,14 @@ def main(args):
     )
 
     if args.dataset == 'dota':
-        raise NotImplementedError
+        datamodule = DotaDataModule(
+            "oc",
+            "xyxy",
+            "./datasets/dota.pth",
+            "/mnt/d/datasets/split_ss_dota",
+            train_loader_kwargs,
+            test_loader_kwargs
+        )
     
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
@@ -41,6 +47,7 @@ def main(args):
         
     if args.model_type == 'rotated':
         model = RotatedFasterRCNN()
+        
     elif args.model_type == 'oriented':
         # model = OrientedRCNN()
         raise NotImplementedError

@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.box_coders import BoxCoder, HBoxCoder, OBoxCoder
+from models.detection.boxcoders import BoxCoder, HBoxCoder, OBoxCoder
 
 class FocalLoss(nn.Module):
     def __init__(self, weight=None, gamma=2, reduction='mean'):
