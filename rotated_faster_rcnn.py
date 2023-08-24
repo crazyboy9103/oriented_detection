@@ -3,7 +3,6 @@ from typing import Optional, Tuple, Literal
 
 import torch
 import torch.optim as optim
-from torch.optim.lr_scheduler import StepLR
 from pytorch_lightning import LightningModule
 import wandb 
 
@@ -59,7 +58,7 @@ class RotatedFasterRCNNConfig:
     # R-CNN parameters
     box_score_thresh: float = 0.05
     box_nms_thresh: float = 0.5
-    box_detections_per_img: int = 100 # 200
+    box_detections_per_img: int = 200 # 200
     box_fg_iou_thresh: float = 0.5
     box_bg_iou_thresh: float = 0.5
     box_batch_size_per_image: int = 512
@@ -109,11 +108,13 @@ class RotatedFasterRCNN(LightningModule):
     def put_outputs(self, outputs):
         # [[cls 1, cls 2 ... cls 13], [(img2)...]]
         for output in outputs:
-            per_class_outputs = [[] for _ in range(self.train_config.num_classes - 1)]
-            oboxes = output["oboxes"]
-            oscores = output["oscores"]
+            per_class_outputs = [[] for _ in range(self.train_config['num_classes'] - 1)]
+            oboxes = output["oboxes"].detach().cpu()
+            oscores = output["oscores"].detach().cpu()
+            olabels = output["olabels"].detach().cpu()
             oboxes_with_scores = torch.cat([oboxes, oscores.unsqueeze(-1)], dim=-1)
-            for obox, olabel in zip(oboxes_with_scores, output["olabels"]):
+            
+            for obox, olabel in zip(oboxes_with_scores, olabels):
                 per_class_outputs[olabel-1].append(obox)
                 
             self.outputs.append(per_class_outputs)
@@ -121,8 +122,8 @@ class RotatedFasterRCNN(LightningModule):
     def put_targets(self, targets):
         for target in targets:
             target_copy = {}
-            target_copy["oboxes"] = target["oboxes"]
-            target_copy["labels"] = target["labels"]
+            target_copy["oboxes"] = target["oboxes"].detach().cpu()
+            target_copy["labels"] = target["labels"].detach().cpu()
             self.targets.append(target_copy)
         
     def forward(self, images, targets=None):
@@ -151,37 +152,32 @@ class RotatedFasterRCNN(LightningModule):
         
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
+            
         self.log('valid-loss', loss)
         if not hasattr(self, 'config') and batch_idx == 0:
             self.logger.experiment.log({
                 "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
-                        for pil_image, image_path in (plot_image(image, output, target, data=MVTecDataset) for image, output, target in zip(images, outputs, targets))]
+                        for pil_image, image_path in (plot_image(image, output, target, MVTecDataset, 0.5, 0.5) for image, output, target in zip(images, outputs, targets))]
             })
             
-        # self.put_outputs(outputs)
-        # self.put_targets(targets)
+        self.put_outputs(outputs)
+        self.put_targets(targets)
         return loss_dict
 
     def on_validation_epoch_end(self):
-        # map, _ = eval_rbbox_map(
-        #     self.outputs,
-        #     self.targets, 
-        #     None,
-        #     0.5,
-        #     True
-        # )
-        # self.outputs = []
-        # self.targets = []
-        pass
+        map, _ = eval_rbbox_map(
+            self.outputs,
+            self.targets, 
+            0.5,
+            True
+        )
+        print(map)
+        self.outputs = []
+        self.targets = []
         
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
-        # optimizer = optim.SGD(self.parameters(), lr=self.lr, momentum=0.9, weight_decay=1e-4)
-        # return optimizer
-        # scheduler = CosineAnnealingWarmUpRestartsDecay(optimizer, T_0=500, T_mult=1, eta_max=self.lr,  T_up=10, gamma=0.9)
-        # scheduler = StepLR(optimizer, step_size=500, gamma=0.5)
-        # TODO this is just roughly calculated
         steps_per_epoch = 180
         start, end = steps_per_epoch * 20, steps_per_epoch * 22
         scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[start, end], gamma=1/3, warmup_iters=500)

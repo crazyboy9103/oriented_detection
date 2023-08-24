@@ -21,11 +21,10 @@ def average_precision(recalls, precisions, mode='area'):
     Returns:
         float or ndarray: calculated average precision
     """
-    no_scale = False
-    if recalls.ndim == 1:
-        no_scale = True
-        recalls = recalls[np.newaxis, :]
-        precisions = precisions[np.newaxis, :]
+
+    recalls = recalls[np.newaxis, :]
+    precisions = precisions[np.newaxis, :]
+    
     assert recalls.shape == precisions.shape and recalls.ndim == 2
     num_scales = recalls.shape[0]
     ap = np.zeros(num_scales, dtype=np.float32)
@@ -40,6 +39,7 @@ def average_precision(recalls, precisions, mode='area'):
             ind = np.where(mrec[i, 1:] != mrec[i, :-1])[0]
             ap[i] = np.sum(
                 (mrec[i, ind + 1] - mrec[i, ind]) * mpre[i, ind + 1])
+            
     elif mode == '11points':
         for i in range(num_scales):
             for thr in np.arange(0, 1 + 1e-3, 0.1):
@@ -47,11 +47,12 @@ def average_precision(recalls, precisions, mode='area'):
                 prec = precs.max() if precs.size > 0 else 0
                 ap[i] += prec
         ap /= 11
+        
     else:
         raise ValueError(
             'Unrecognized mode, only "area" and "11points" are supported')
-    if no_scale:
-        ap = ap[0]
+    
+    ap = ap[0]
     return ap
 
 def tpfp_default(det_bboxes,
@@ -73,8 +74,6 @@ def tpfp_default(det_bboxes,
             each array is (num_scales, m).
     """
     det_bboxes = np.array(det_bboxes)
-    print("det_bboxes", det_bboxes.shape)
-    print("gt_bboxes", gt_bboxes.shape)
     num_dets = det_bboxes.shape[0]
     num_gts = gt_bboxes.shape[0]
     if area_ranges is None:
@@ -101,8 +100,8 @@ def tpfp_default(det_bboxes,
         
     
     ious = box_iou_rotated(
-        torch.from_numpy(det_bboxes[:, :5]).float(),
-        torch.from_numpy(gt_bboxes).float()
+        torch.from_numpy(det_bboxes[:, :5]),
+        torch.from_numpy(gt_bboxes)
     ).numpy()
 
     det_angles = det_bboxes[:, 4]
@@ -167,10 +166,8 @@ def get_cls_results(det_results, annotations, class_id):
 
 def eval_rbbox_map(det_results,
                    annotations,
-                   scale_ranges=None,
                    iou_thr=0.5,
                    use_07_metric=True,
-                   dataset=None,
                    logger=None,
                    nproc=4):
     """Evaluate mAP of a rotated dataset.
@@ -183,16 +180,9 @@ def eval_rbbox_map(det_results,
             the list indicates an image. Keys of annotations are:
             - `oboxes`: numpy array of shape (n, 5)
             - `labels`: numpy array of shape (n, )
-        scale_ranges (list[tuple] | None): Range of scales to be evaluated,
-            in the format [(min1, max1), (min2, max2), ...]. A range of
-            (32, 64) means the area range between (32**2, 64**2).
-            Default: None.
         iou_thr (float): IoU threshold to be considered as matched.
             Default: 0.5.
         use_07_metric (bool): Whether to use the voc07 metric.
-        dataset (list[str] | str | None): Dataset name or dataset classes,
-            there are minor differences in metrics for different datasets, e.g.
-            "voc07", "imagenet_det", etc. Default: None.
         logger (logging.Logger | str | None): The way to print the mAP
             summary. See `mmcv.utils.print_log()` for details. Default: None.
         nproc (int): Processes used for computing TP and FP.
@@ -201,21 +191,14 @@ def eval_rbbox_map(det_results,
     Returns:
         tuple: (mAP, [dict, dict, ...])
     """
-    # for result in det_results:
-    #     for i, t in enumerate(result):
-    #         result[i] = t.detach().cpu()
-    for ann in annotations:
-        for k, v in ann.items():
-            ann[k] = v.detach().cpu()
-            
     assert len(det_results) == len(annotations)
     if len(det_results) == 0:
         return 0, []
+    
     num_imgs = len(det_results)
-    num_scales = len(scale_ranges) if scale_ranges is not None else 1
+    num_scales = 1
     num_classes = len(det_results[0])  # positive class num
-    area_ranges = ([(rg[0]**2, rg[1]**2) for rg in scale_ranges]
-                   if scale_ranges is not None else None)
+    area_ranges = (None)
 
     pool = get_context('spawn').Pool(nproc)
     eval_results = []
@@ -245,19 +228,8 @@ def eval_rbbox_map(det_results,
         # sort all det bboxes by score, also sort tp and fp
         cls_dets = np.vstack(cls_dets)
         num_dets = cls_dets.shape[0]
-        try:
-            sort_inds = np.argsort(-cls_dets[:, -1])
-        except:
-            eval_results.append({
-                'num_gts': 0,
-                'num_dets': 0,
-                'recall': 0,
-                'precision': 0,
-                'ap': 0,
-                'miou': 0, 
-                'mod_miou': 0
-            })
-            continue
+        sort_inds = np.argsort(-cls_dets[:, -1])
+        
         tp = np.hstack(tp)[:, sort_inds]
         fp = np.hstack(fp)[:, sort_inds]
         ious = np.hstack(ious)[:, sort_inds]
@@ -281,10 +253,10 @@ def eval_rbbox_map(det_results,
         recalls = tp / np.maximum(num_gts[:, np.newaxis], eps)
         precisions = tp / np.maximum((tp + fp), eps)
         # calculate AP
-        if scale_ranges is None:
-            recalls = recalls[0, :]
-            precisions = precisions[0, :]
-            num_gts = num_gts.item()
+        
+        recalls = recalls[0, :]
+        precisions = precisions[0, :]
+        num_gts = num_gts.item()
         
         mod_miou = np.mean(modulated_ious)
         miou = np.mean(nonzero_ious)
@@ -305,34 +277,22 @@ def eval_rbbox_map(det_results,
             'mod_miou': mod_miou
         })
     pool.close()
-    if scale_ranges is not None:
-        # shape (num_classes, num_scales)
-        all_ap = np.vstack([cls_result['ap'] for cls_result in eval_results])
-        all_num_gts = np.vstack(
-            [cls_result['num_gts'] for cls_result in eval_results])
-        mean_ap = []
-        for i in range(num_scales):
-            if np.any(all_num_gts[:, i] > 0):
-                mean_ap.append(all_ap[all_num_gts[:, i] > 0, i].mean())
-            else:
-                mean_ap.append(0.0)
-    else:
-        aps = []
-        for cls_result in eval_results:
-            if cls_result['num_gts'] > 0:
-                aps.append(cls_result['ap'])
-        mean_ap = np.array(aps).mean().item() if aps else 0.0
+    
+        
+    aps = []
+    for cls_result in eval_results:
+        if cls_result['num_gts'] > 0:
+            aps.append(cls_result['ap'])
+    mean_ap = np.array(aps).mean().item() if aps else 0.0
 
     print_map_summary(
-        mean_ap, eval_results, dataset, area_ranges, logger=logger)
+        mean_ap, eval_results, logger=logger)
 
     return mean_ap, eval_results
 
 
 def print_map_summary(mean_ap,
                       results,
-                      dataset=None,
-                      scale_ranges=None,
                       logger=None):
     """Print mAP and results of each class.
 
@@ -342,8 +302,6 @@ def print_map_summary(mean_ap,
     Args:
         mean_ap (float): Calculated from `eval_map()`.
         results (list[dict]): Calculated from `eval_map()`.
-        dataset (list[str] | str | None): Dataset name or dataset classes.
-        scale_ranges (list[tuple] | None): Range of scales to be evaluated.
         logger (logging.Logger | str | None): The way to print the mAP
             summary. See `mmcv.utils.print_log()` for details. Default: None.
     """
@@ -355,10 +313,7 @@ def print_map_summary(mean_ap,
         num_scales = len(results[0]['ap'])
     else:
         num_scales = 1
-
-    if scale_ranges is not None:
-        assert len(scale_ranges) == num_scales
-
+        
     num_classes = len(results)
 
     recalls = np.zeros((num_scales, num_classes), dtype=np.float32)
@@ -374,18 +329,13 @@ def print_map_summary(mean_ap,
         mious[:, i] = cls_result['miou']
         mod_mious[:, i] = cls_result['mod_miou']
 
-    if dataset is None:
-        label_names = [str(i) for i in range(num_classes)]
-    else:
-        label_names = dataset
+    label_names = [str(i) for i in range(num_classes)]
 
     if not isinstance(mean_ap, list):
         mean_ap = [mean_ap]
 
     header = ['class', 'gts', 'dets', 'recall', 'ap', 'miou', 'mod_miou', 'mod_miou/miou']
     for i in range(num_scales):
-        if scale_ranges is not None:
-            print(f'Scale range {scale_ranges[i]}')
         table_data = [header]
         fracs = np.nan_to_num(mod_mious / mious)
         for j in range(num_classes):
@@ -400,3 +350,4 @@ def print_map_summary(mean_ap,
         table_data.append(['mAP|mIoU|mmIoU|mmIoU/mIoU', '', '', '', f'{mean_ap[i]:.3f}', f'{miou:.3f}', f'{mmiou:.3f}', f'{frac:.3f}'])
         table = AsciiTable(table_data)
         table.inner_footing_row_border = True
+        print(table.table)

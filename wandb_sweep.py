@@ -1,3 +1,4 @@
+import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -10,6 +11,7 @@ from datasets.mvtec import MVTecDataModule
 from datasets.dota import DotaDataModule
 
 def main(args):
+    torch.cuda.empty_cache() # CUDA error: device-side assert triggered
     wandb.init(project="sweep")
     config = wandb.config
     
@@ -33,7 +35,7 @@ def main(args):
         datamodule = MVTecDataModule(
             "oc", 
             "xyxy", 
-            "/workspace/datasets/mvtec.pth", 
+            "./datasets/mvtec.pth", 
             args.data_path, 
             train_loader_kwargs, 
             test_loader_kwargs
@@ -73,7 +75,8 @@ def main(args):
         deterministic=True,
         profiler="pytorch",
         # fast_dev_run=True,
-        # accelerator="cpu",
+        accelerator="gpu",
+        devices=1,
         # detect_anomaly=True,
         callbacks=callbacks,
     )
@@ -81,6 +84,7 @@ def main(args):
         model, 
         datamodule=datamodule,
     )
+    model = None
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -88,12 +92,13 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota'])
     parser.add_argument('--project_name', type=str, default='rfrcnn-sweep')
     parser.add_argument('--experiment_name', type=str, default='test experiment')
-    parser.add_argument('--data_path', type=str, default='/default/datasets/mvtec-rotated-screws')
+    #parser.add_argument('--data_path', type=str, default='/default/datasets/mvtec-rotated-screws')
+    parser.add_argument('--data_path', type=str, default='/mnt/d/datasets/split_ss_mvtec')
     parser.add_argument('--sweep_name', type=str, default='first_sweep')
     parser.add_argument('--sweep_method', type=str, default='random', choices=['random', 'grid', 'bayes'])
     parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
-    parser.add_argument('--checkpoint_path', type=str, default='./checkpoints')
-    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--checkpoint_path', type=str, default='./checkpoints/sweep')
+    parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--gradient_clip_val', type=float, default=35)
     parser.add_argument('--num_epochs', type=int, default=24)
     args = parser.parse_args()
@@ -122,5 +127,5 @@ if __name__ == '__main__':
         }
     }
     sweep_id=wandb.sweep(sweep_config, project=args.project_name)
-    wandb.agent(sweep_id=sweep_id, function=lambda: main(args), count=5)
+    wandb.agent(sweep_id=sweep_id, function=lambda: main(args), count=20)
     

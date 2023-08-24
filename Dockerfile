@@ -22,7 +22,7 @@ RUN update-alternatives --config python3
 RUN ln -sf /usr/bin/python3.10 /usr/bin/python3 && \ 
     ln -sf /usr/bin/python3.10 /usr/bin/python
 
-RUN apt-get -y install wget git tmux
+RUN apt-get -y install wget
 RUN wget https://bootstrap.pypa.io/get-pip.py \
     && python get-pip.py \
     && rm get-pip.py
