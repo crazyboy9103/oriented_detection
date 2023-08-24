@@ -226,14 +226,12 @@ def _multiscale_rotated_roi_align(
 
     num_levels = len(x_filtered)
     rois = _convert_to_roi_format(boxes)
-
     if num_levels == 1:
-        return roi_align_rotated(
+        rroi_align = ROIAlignRotated(output_size, scales[0], sampling_ratio)
+        
+        return rroi_align(
             x_filtered[0],
             rois,
-            output_size,
-            scales[0],
-            sampling_ratio,
         )
 
     levels = mapper(boxes)
@@ -256,13 +254,11 @@ def _multiscale_rotated_roi_align(
     for level, (per_level_feature, scale) in enumerate(zip(x_filtered, scales)):
         idx_in_level = torch.where(levels == level)[0]
         rois_per_level = rois[idx_in_level]
-
-        result_idx_in_level = roi_align_rotated(
+        rroi_align = ROIAlignRotated(output_size, scale, sampling_ratio)
+        
+        result_idx_in_level = rroi_align(
             per_level_feature,
             rois_per_level,
-            output_size,
-            scale,
-            sampling_ratio,
         )
 
         if torchvision._is_tracing():
