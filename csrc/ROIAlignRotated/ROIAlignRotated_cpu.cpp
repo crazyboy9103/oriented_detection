@@ -231,6 +231,7 @@ void ROIAlignRotatedForward(
     T roi_height = current_roi[4] * spatial_scale;
     // T theta = current_roi[5] * M_PI / 180.0;
     T theta = current_roi[5];
+    theta = -theta;  // Since clockwise, the angle needs to be reversed.
 
     T cos_theta = cos(theta);
     T sin_theta = sin(theta);
@@ -349,6 +350,7 @@ void ROIAlignRotatedBackward(
     T roi_height = current_roi[4] * spatial_scale;
     // T theta = current_roi[5] * M_PI / 180.0;
     T theta = current_roi[5];
+    theta = -theta;  // Since clockwise, the angle needs to be reversed.
     
     T cos_theta = cos(theta);
     T sin_theta = sin(theta);

@@ -5,6 +5,7 @@
 #include <ATen/cuda/CUDAApplyUtils.cuh>
 #include "box_iou_rotated_utils.h"
 
+
 namespace detectron2 {
 
 // 2D block with 32 * 16 = 512 threads per block
@@ -17,48 +18,62 @@ __global__ void box_iou_rotated_cuda_kernel(
     const int n_boxes2,
     const T* dev_boxes1,
     const T* dev_boxes2,
-    T* dev_ious) {
-  const int row_start = blockIdx.x * blockDim.x;
-  const int col_start = blockIdx.y * blockDim.y;
+    T* dev_ious, 
+    const bool aligned) {
+  if (aligned) {
+    CUDA_1D_KERNEL_LOOP(index, n_boxes1) {
+      int b1 = index;
+      int b2 = index;
 
-  const int row_size = min(n_boxes1 - row_start, blockDim.x);
-  const int col_size = min(n_boxes2 - col_start, blockDim.y);
+      int base1 = b1 * 5;
 
-  __shared__ float block_boxes1[BLOCK_DIM_X * 5];
-  __shared__ float block_boxes2[BLOCK_DIM_Y * 5];
+      float block_boxes1[5];
+      float block_boxes2[5];
 
-  // It's safe to copy using threadIdx.x since BLOCK_DIM_X >= BLOCK_DIM_Y
-  if (threadIdx.x < row_size && threadIdx.y == 0) {
-    block_boxes1[threadIdx.x * 5 + 0] =
-        dev_boxes1[(row_start + threadIdx.x) * 5 + 0];
-    block_boxes1[threadIdx.x * 5 + 1] =
-        dev_boxes1[(row_start + threadIdx.x) * 5 + 1];
-    block_boxes1[threadIdx.x * 5 + 2] =
-        dev_boxes1[(row_start + threadIdx.x) * 5 + 2];
-    block_boxes1[threadIdx.x * 5 + 3] =
-        dev_boxes1[(row_start + threadIdx.x) * 5 + 3];
-    block_boxes1[threadIdx.x * 5 + 4] =
-        dev_boxes1[(row_start + threadIdx.x) * 5 + 4];
-  }
+      block_boxes1[0] = dev_boxes1[base1 + 0];
+      block_boxes1[1] = dev_boxes1[base1 + 1];
+      block_boxes1[2] = dev_boxes1[base1 + 2];
+      block_boxes1[3] = dev_boxes1[base1 + 3];
+      block_boxes1[4] = dev_boxes1[base1 + 4];
 
-  if (threadIdx.x < col_size && threadIdx.y == 0) {
-    block_boxes2[threadIdx.x * 5 + 0] =
-        dev_boxes2[(col_start + threadIdx.x) * 5 + 0];
-    block_boxes2[threadIdx.x * 5 + 1] =
-        dev_boxes2[(col_start + threadIdx.x) * 5 + 1];
-    block_boxes2[threadIdx.x * 5 + 2] =
-        dev_boxes2[(col_start + threadIdx.x) * 5 + 2];
-    block_boxes2[threadIdx.x * 5 + 3] =
-        dev_boxes2[(col_start + threadIdx.x) * 5 + 3];
-    block_boxes2[threadIdx.x * 5 + 4] =
-        dev_boxes2[(col_start + threadIdx.x) * 5 + 4];
-  }
-  __syncthreads();
+      int base2 = b2 * 5;
 
-  if (threadIdx.x < row_size && threadIdx.y < col_size) {
-    int offset = (row_start + threadIdx.x) * n_boxes2 + col_start + threadIdx.y;
-    dev_ious[offset] = single_box_iou_rotated<T>(
-        block_boxes1 + threadIdx.x * 5, block_boxes2 + threadIdx.y * 5);
+      block_boxes2[0] = dev_boxes2[base2 + 0];
+      block_boxes2[1] = dev_boxes2[base2 + 1];
+      block_boxes2[2] = dev_boxes2[base2 + 2];
+      block_boxes2[3] = dev_boxes2[base2 + 3];
+      block_boxes2[4] = dev_boxes2[base2 + 4];
+
+      dev_ious[index] =
+          single_box_iou_rotated<T>(block_boxes1, block_boxes2);
+    }
+  } else {
+    CUDA_1D_KERNEL_LOOP(index, n_boxes1 * n_boxes2) {
+      int b1 = index / n_boxes2;
+      int b2 = index % n_boxes2;
+
+      int base1 = b1 * 5;
+
+      float block_boxes1[5];
+      float block_boxes2[5];
+
+      block_boxes1[0] = dev_boxes1[base1 + 0];
+      block_boxes1[1] = dev_boxes1[base1 + 1];
+      block_boxes1[2] = dev_boxes1[base1 + 2];
+      block_boxes1[3] = dev_boxes1[base1 + 3];
+      block_boxes1[4] = dev_boxes1[base1 + 4];
+
+      int base2 = b2 * 5;
+
+      block_boxes2[0] = dev_boxes2[base2 + 0];
+      block_boxes2[1] = dev_boxes2[base2 + 1];
+      block_boxes2[2] = dev_boxes2[base2 + 2];
+      block_boxes2[3] = dev_boxes2[base2 + 3];
+      block_boxes2[4] = dev_boxes2[base2 + 4];
+
+      dev_ious[index] =
+          single_box_iou_rotated<T>(block_boxes1, block_boxes2);
+      }
   }
 }
 
@@ -67,10 +82,8 @@ at::Tensor box_iou_rotated_cuda(
     const at::Tensor& boxes1,
     const at::Tensor& boxes2) {
   using scalar_t = float;
-  AT_ASSERTM(
-      boxes1.scalar_type() == at::kFloat, "boxes1 must be a float tensor");
-  AT_ASSERTM(
-      boxes2.scalar_type() == at::kFloat, "boxes2 must be a float tensor");
+  AT_ASSERTM(boxes1.scalar_type() == at::kFloat, "boxes1 must be a float tensor");
+  AT_ASSERTM(boxes2.scalar_type() == at::kFloat, "boxes2 must be a float tensor");
   AT_ASSERTM(boxes1.is_cuda(), "boxes1 must be a CUDA tensor");
   AT_ASSERTM(boxes2.is_cuda(), "boxes2 must be a CUDA tensor");
   at::cuda::CUDAGuard device_guard(boxes1.device());
@@ -80,6 +93,7 @@ at::Tensor box_iou_rotated_cuda(
 
   at::Tensor ious =
       at::empty({num_boxes1 * num_boxes2}, boxes1.options().dtype(at::kFloat));
+  auto output_size = ious.numel();
 
   bool transpose = false;
   if (num_boxes1 > 0 && num_boxes2 > 0) {
@@ -99,22 +113,28 @@ at::Tensor box_iou_rotated_cuda(
       transpose = true;
     }
 
-    const int blocks_x =
-        at::cuda::ATenCeilDiv(static_cast<int>(num_boxes1), BLOCK_DIM_X);
-    const int blocks_y =
-        at::cuda::ATenCeilDiv(static_cast<int>(num_boxes2), BLOCK_DIM_Y);
+    // const int blocks_x =
+    //     at::cuda::ATenCeilDiv(static_cast<int>(num_boxes1), BLOCK_DIM_X);
+    // const int blocks_y =
+    //     at::cuda::ATenCeilDiv(static_cast<int>(num_boxes2), BLOCK_DIM_Y);
 
-    dim3 blocks(blocks_x, blocks_y);
-    dim3 threads(BLOCK_DIM_X, BLOCK_DIM_Y);
+    // dim3 blocks(blocks_x, blocks_y);
+    // dim3 threads(BLOCK_DIM_X, BLOCK_DIM_Y);
+    at::cuda::CUDAGuard device_guard(boxes1.device());
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-    box_iou_rotated_cuda_kernel<scalar_t><<<blocks, threads, 0, stream>>>(
-        num_boxes1,
-        num_boxes2,
-        data1,
-        data2,
-        (scalar_t*)ious.data_ptr<scalar_t>());
-
+    // box_iou_rotated_cuda_kernel<scalar_t><<<blocks, threads, 0, stream>>>(
+    //     num_boxes1,
+    //     num_boxes2,
+    //     data1,
+    //     data2,
+    //     (scalar_t*)ious.data_ptr<scalar_t>());
+    bool aligned = true;
+    box_iou_rotated_cuda_kernel<scalar_t>
+      <<<GET_BLOCKS(output_size), THREADS_PER_BLOCK, 0, stream>>>(
+          num_boxes1, num_boxes2, boxes1.data_ptr<scalar_t>(),
+          boxes2.data_ptr<scalar_t>(), (scalar_t*)ious.data_ptr<scalar_t>(),
+          aligned);
     AT_CUDA_CHECK(cudaGetLastError());
   }
 
