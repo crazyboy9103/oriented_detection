@@ -20,30 +20,19 @@ class DotaDataset(BaseDataset):
         self, 
         save_dir: str = "./dota.pth",
         data_path: str = "/datasets/split_ss_dota_512",
-        angle_version="oc", 
-        hbb_version: Literal["xyxy", "xywh"]="xyxy",
         split: Literal["train", "test"]="train",
     ):
-        """
-        Args:
-            angle_version: angle version of the dataset, one of ["oc", "le90", "le135"]. Currently only "oc" is supported.
-        
-        """
-        super(DotaDataset, self).__init__(save_dir, data_path, angle_version, hbb_version, split)
+        super(DotaDataset, self).__init__(save_dir, data_path, split)
     
 class DotaDataModule(pl.LightningDataModule):
     def __init__(
         self, 
-        angle_version="oc", 
-        hbb_version="xyxy", 
         save_dir="/workspace/datasets/dota_512.pth",
         data_path="/datasets/split_ss_dota_512",
         train_loader_kwargs: Dict[str, Any] = dict(batch_size=1, num_workers=4, shuffle=True, pin_memory=True), 
         test_loader_kwargs: Dict[str, Any] = dict(batch_size=1, num_workers=4, shuffle=False, pin_memory=True),
     ):
         super(DotaDataModule, self).__init__()
-        self.angle_version = angle_version
-        self.hbb_version = hbb_version
         self.save_dir = save_dir
         self.data_path = data_path
         
@@ -54,16 +43,11 @@ class DotaDataModule(pl.LightningDataModule):
         self.train_dataset = DotaDataset(
             save_dir = self.save_dir,
             data_path = self.data_path,
-            angle_version = self.angle_version, 
-            hbb_version = self.hbb_version,
             split = "train",
         )
-
         self.test_dataset = DotaDataset(
             save_dir = self.save_dir,
             data_path = self.data_path,
-            angle_version = self.angle_version, 
-            hbb_version = self.hbb_version,
             split = "test",
         )
     

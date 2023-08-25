@@ -19,18 +19,15 @@ class BaseDataset(Dataset):
     def __init__(self, 
                  save_dir: str,
                  data_path: str,
-                 angle_version: Literal["oc", "le90", "le135"]="oc", 
-                 hbb_version: Literal["xyxy", "xywh"]="xyxy",
                  split: Literal["train", "test"]="train",
                  ):
         """
         Args:
-            angle_version: angle version of the dataset, one of ["oc", "le90", "le135"]. Currently only "oc" is supported.
-        
+            save_dir (str): pth path to save the processed data
+            data_path (str): path to the dataset folder
+            split (str): one of ["train", "test"]    
         """
         super(BaseDataset, self).__init__()
-        self.angle_version = angle_version
-        self.hbb_version = hbb_version
         self.data = self.prepare_data(save_dir, data_path).get(split)
     
     @classmethod
@@ -61,8 +58,6 @@ class BaseDataset(Dataset):
         data = {
             "train": train_anns,
             "test": test_anns,
-            "angle": self.angle_version,
-            "hbb": self.hbb_version
         }
         torch.save(data, save_dir)
         return data
@@ -101,8 +96,8 @@ class BaseDataset(Dataset):
                     
                     poly = np.array(bbox_info[:8], dtype=np.float32)
                     try:
-                        obb = poly2obb_np(poly, self.angle_version)
-                        hbb = poly2hbb_np(poly, self.hbb_version)
+                        obb = poly2obb_np(poly)
+                        hbb = poly2hbb_np(poly)
                         assert hbb[2] > hbb[0] and hbb[3] > hbb[1], "hbb must be valid"
                         
                         if not obb:
@@ -122,13 +117,7 @@ class BaseDataset(Dataset):
                     gt_labels.append(label)
                     gt_polygons.append(poly)
                     
-                    if self.hbb_version == "xyxy":
-                        w, h = hbb[2] - hbb[0], hbb[3] - hbb[1]
-                        gt_areas.append(w * h)
-                        
-                    elif self.hbb_version == "xywh":
-                        gt_areas.append(hbb[2] * hbb[3])
-                      
+                    gt_areas.append((hbb[2] - hbb[0]) * (hbb[3] - hbb[1]))
                     gt_oareas.append(obb[2] * obb[3])
                                             
             ann = {}

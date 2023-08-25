@@ -16,6 +16,7 @@ from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, 
 
 from detectron2._C import roi_align_rotated_backward, roi_align_rotated_forward
 
+# Original implementation in detectron2.layers.roi_align_rotated
 # class _ROIAlignRotated(Function):
 #     @staticmethod
 #     def forward(ctx, input, roi, output_size, spatial_scale, sampling_ratio):
@@ -373,7 +374,9 @@ class MultiScaleRotatedRoIAlign(nn.Module):
         >>> i['feat2'] = torch.rand(1, 5, 32, 32)  # this feature won't be used in the pooling
         >>> i['feat3'] = torch.rand(1, 5, 16, 16)
         >>> # create some random rotated bounding boxes
-        >>> boxes = torch.rand(6, 5) * 256; boxes[:, 2:4] += boxes[:, :2]
+        >>> boxes = torch.rand(6, 4) * 256; boxes[:, 2:] += boxes[:, :2]
+        >>> angles = torch.rand(6, 1) * torch.pi / 2;
+        >>> boxes = torch.cat((boxes, angles), dim=1)
         >>> # original image size, before computing the feature maps
         >>> image_sizes = [(512, 512)]
         >>> output = m(i, [boxes], image_sizes)

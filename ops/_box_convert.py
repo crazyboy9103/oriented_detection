@@ -18,7 +18,6 @@ def bbox_flip(bboxes, img_shape, direction='horizontal'):
     Returns:
         Tensor: Flipped bboxes.
     """
-    version = 'oc'
     assert bboxes.shape[-1] % 5 == 0
     assert direction in ['horizontal', 'vertical', 'diagonal']
     flipped = bboxes.clone()
@@ -29,67 +28,12 @@ def bbox_flip(bboxes, img_shape, direction='horizontal'):
     else:
         flipped[:, 0] = img_shape[1] - bboxes[:, 0] - 1
         flipped[:, 1] = img_shape[0] - bboxes[:, 1] - 1
-    if version == 'oc':
-        rotated_flag = (bboxes[:, 4] != np.pi / 2)
-        flipped[rotated_flag, 4] = np.pi / 2 - bboxes[rotated_flag, 4]
-        flipped[rotated_flag, 2] = bboxes[rotated_flag, 3]
-        flipped[rotated_flag, 3] = bboxes[rotated_flag, 2]
-    else:
-        flipped[:, 4] = norm_angle(np.pi - bboxes[:, 4], version)
+        
+    rotated_flag = (bboxes[:, 4] != np.pi / 2)
+    flipped[rotated_flag, 4] = np.pi / 2 - bboxes[rotated_flag, 4]
+    flipped[rotated_flag, 2] = bboxes[rotated_flag, 3]
+    flipped[rotated_flag, 3] = bboxes[rotated_flag, 2]
     return flipped
-
-
-def bbox_mapping_back(bboxes,
-                      img_shape,
-                      scale_factor,
-                      flip,
-                      flip_direction='horizontal'):
-    """Map bboxes from testing scale to original image scale."""
-    new_bboxes = bbox_flip(bboxes, img_shape,
-                           flip_direction) if flip else bboxes
-    new_bboxes[:, :4] = new_bboxes[:, :4] / new_bboxes.new_tensor(scale_factor)
-    return new_bboxes.view(bboxes.shape)
-
-
-def rbbox2result(bboxes, labels, num_classes):
-    """Convert detection results to a list of numpy arrays.
-
-    Args:
-        bboxes (torch.Tensor): shape (n, 6)
-        labels (torch.Tensor): shape (n, )
-        num_classes (int): class number, including background class
-
-    Returns:
-        list(ndarray): bbox results of each class
-    """
-    if bboxes.shape[0] == 0:
-        return [np.zeros((0, 6), dtype=np.float32) for _ in range(num_classes)]
-    else:
-        bboxes = bboxes.cpu().numpy()
-        labels = labels.cpu().numpy()
-        return [bboxes[labels == i, :] for i in range(num_classes)]
-
-
-def rbbox2roi(bbox_list):
-    """Convert a list of bboxes to roi format.
-
-    Args:
-        bbox_list (list[Tensor]): a list of bboxes corresponding to a batch
-            of images.
-
-    Returns:
-        Tensor: shape (n, 6), [batch_ind, cx, cy, w, h, a]
-    """
-    rois_list = []
-    for img_id, bboxes in enumerate(bbox_list):
-        if bboxes.size(0) > 0:
-            img_inds = bboxes.new_full((bboxes.size(0), 1), img_id)
-            rois = torch.cat([img_inds, bboxes[:, :5]], dim=-1)
-        else:
-            rois = bboxes.new_zeros((0, 6))
-        rois_list.append(rois)
-    rois = torch.cat(rois_list, 0)
-    return rois
 
 
 def poly2obb(polys, version='oc'):
@@ -108,36 +52,7 @@ def poly2obb(polys, version='oc'):
         raise NotImplementedError
     return results    
 
-def poly2obb_np(polys, version='oc'):
-    """Convert polygons to oriented bounding boxes.
-
-    Args:
-        polys (ndarray): [x0,y0,x1,y1,x2,y2,x3,y3]
-        version (Str): angle representations.
-
-    Returns:
-        obbs (ndarray): [x_ctr,y_ctr,w,h,angle]
-    """
-    if version == 'oc':
-        results = poly2obb_np_oc(polys)
-    else:
-        raise NotImplementedError
-    return results
-
-def poly2hbb_np(polys, version='xyxy'):
-    """Convert polygons to horizontal bounding boxes.
-    
-    """
-    if version == 'xyxy':
-        results = poly2hbb_np_xyxy(polys)
-    elif version == 'xywh':
-        results = poly2hbb_np_xywh(polys)
-    else:
-        raise NotImplementedError
-
-    return results
-
-def poly2hbb_np_xyxy(polys):
+def poly2hbb_np(polys):
     if polys.shape[-1] == 8:
         polys = polys.reshape(4, 2)
         
@@ -145,100 +60,25 @@ def poly2hbb_np_xyxy(polys):
     x2, y2 = polys.max(axis=0)
     return np.array([x1, y1, x2, y2])
 
-def poly2hbb_np_xywh(polys):
-    if polys.shape[-1] == 8:
-        polys = polys.reshape(4, 2)
-    
-    cx, cy = polys.mean(axis=0)
-    w, h = polys.max(axis=0) - polys.min(axis=0)
-    return np.array([cx, cy, w, h])
-
-def obb2hbb(rbboxes, version='oc'):
-    """Convert oriented bounding boxes to horizontal bounding boxes.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-        version (Str): angle representations.
-
-    Returns:
-        hbbs (torch.Tensor): [x_ctr,y_ctr,w,h,-pi/2]
-    """
-    if version == 'oc':
-        results = obb2hbb_oc(rbboxes)
-    else:
-        raise NotImplementedError
-    return results
-
-
-def obb2poly(rbboxes, version='oc'):
-    """Convert oriented bounding boxes to polygons.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-        version (Str): angle representations.
-
-    Returns:
-        polys (torch.Tensor): [x0,y0,x1,y1,x2,y2,x3,y3]
-    """
-    if version == 'oc':
-        results = obb2poly_oc(rbboxes)
-    else:
-        raise NotImplementedError
-    return results
-
-
-def obb2poly_np(rbboxes, version='oc'):
-    """Convert oriented bounding boxes to polygons.
-
-    Args:
-        obbs (ndarray): [x_ctr,y_ctr,w,h,angle]
-        version (Str): angle representations.
-
-    Returns:
-        polys (ndarray): [x0,y0,x1,y1,x2,y2,x3,y3]
-    """
-    if version == 'oc':
-        results = obb2poly_np_oc(rbboxes)
-    else:
-        raise NotImplementedError
-    return results
-
-
-def obb2xyxy(rbboxes, version='oc'):
-    """Convert oriented bounding boxes to horizontal bounding boxes.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-        version (Str): angle representations.
-
-    Returns:
-        hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-    """
-    if version == 'oc':
-        results = obb2xyxy_oc(rbboxes)
-    else:
-        raise NotImplementedError
-    return results
-
-
-def hbb2obb(hbboxes, version='oc'):
+def hbb2obb(hbboxes):
     """Convert horizontal bounding boxes to oriented bounding boxes.
 
     Args:
         hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-        version (Str): angle representations.
 
     Returns:
         obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
     """
-    is_list = False
-    if isinstance(hbboxes, list):
+    is_list = isinstance(hbboxes, list)
+    if is_list:
         hbboxes = torch.stack(hbboxes, dim=0)
-        is_list = True
-    if version == 'oc':
-        results = hbb2obb_oc(hbboxes)
-    else:
-        raise NotImplementedError
+    
+    x = (hbboxes[..., 0] + hbboxes[..., 2]) * 0.5
+    y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
+    w = hbboxes[..., 2] - hbboxes[..., 0]
+    h = hbboxes[..., 3] - hbboxes[..., 1]
+    theta = x.new_zeros(*x.shape)
+    results = torch.stack([x, y, w, h, theta], dim=1)
     return torch.split(results, len(results), dim=0) if is_list else results 
 
 
@@ -268,7 +108,7 @@ def poly2obb_oc(polys):
     return rbboxes
 
 
-def poly2obb_np_oc(poly):
+def poly2obb_np(poly):
     """Convert polygons to oriented bounding boxes.
 
     Args:
@@ -293,7 +133,7 @@ def poly2obb_np_oc(poly):
     return x, y, w, h, a
 
 
-def obb2poly_oc(rboxes):
+def obb2poly(rboxes):
     """Convert oriented bounding boxes to polygons.
 
     Args:
@@ -318,52 +158,7 @@ def obb2poly_oc(rboxes):
     return torch.stack([p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y], dim=-1)
 
 
-
-
-def obb2hbb_oc(rbboxes):
-    """Convert oriented bounding boxes to horizontal bounding boxes.
-
-    Args:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-
-    Returns:
-        hbbs (torch.Tensor): [x_ctr,y_ctr,w,h,pi/2]
-    """
-    w = rbboxes[:, 2::5]
-    h = rbboxes[:, 3::5]
-    a = rbboxes[:, 4::5]
-    cosa = torch.cos(a)
-    sina = torch.sin(a)
-    hbbox_w = cosa * w + sina * h
-    hbbox_h = sina * w + cosa * h
-    hbboxes = rbboxes.clone().detach()
-    hbboxes[:, 2::5] = hbbox_h
-    hbboxes[:, 3::5] = hbbox_w
-    hbboxes[:, 4::5] = np.pi / 2
-    return hbboxes
-
-
-
-def hbb2obb_oc(hbboxes):
-    """Convert horizontal bounding boxes to oriented bounding boxes.
-
-    Args:
-        hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-
-    Returns:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-    """
-    x = (hbboxes[..., 0] + hbboxes[..., 2]) * 0.5
-    y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
-    w = hbboxes[..., 2] - hbboxes[..., 0]
-    h = hbboxes[..., 3] - hbboxes[..., 1]
-    theta = x.new_zeros(*x.shape)
-    rbboxes = torch.stack([x, y, w, h, theta], dim=1)
-    return rbboxes
-
-
-
-def obb2xyxy_oc(rbboxes):
+def obb2xyxy(rbboxes):
     """Convert oriented bounding boxes to horizontal bounding boxes.
 
     Args:
@@ -391,7 +186,7 @@ def obb2xyxy_oc(rbboxes):
     return torch.stack((x1, y1, x2, y2), -1)
 
 
-def obb2poly_np_oc(rbboxes):
+def obb2poly_np(rbboxes):
     """Convert oriented bounding boxes to polygons.
 
     Args:
@@ -482,22 +277,6 @@ def get_best_begin_point(coordinates):
     coordinates = list(map(get_best_begin_point_single, coordinates.tolist()))
     coordinates = np.array(coordinates)
     return coordinates
-
-
-def norm_angle(angle, angle_range):
-    """Limit the range of angles.
-
-    Args:
-        angle (ndarray): shape(n, ).
-        angle_range (Str): angle representations.
-
-    Returns:
-        angle (ndarray): shape(n, ).
-    """
-    if angle_range == 'oc':
-        return angle
-    else:
-        print('Not yet implemented.')
 
 
 def dist_torch(point1, point2):

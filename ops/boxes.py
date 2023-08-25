@@ -17,17 +17,13 @@ from torchvision.ops import (
 )
 
 from ops._box_convert import (
-    rbbox2result,
-    rbbox2roi,
     poly2hbb_np,
     poly2obb,
     poly2obb_np,
-    obb2hbb,
     obb2poly,
     obb2poly_np,
     obb2xyxy,
     hbb2obb,
-    norm_angle
 )
 from detectron2._C import (
     nms_rotated as _C_nms_rotated,
@@ -213,6 +209,7 @@ def batched_nms_rotated(
     keep = nms_rotated(boxes_for_nms, scores, iou_threshold)
     return keep
 
+# TODO 
 # import torch
 # from mmcv.ops import nms_rotated
 

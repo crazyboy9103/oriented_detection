@@ -60,7 +60,7 @@ class BaseBoxCoder(metaclass=ABCMeta):
         get the decoded boxes.
 
         Args:
-            pred_bboxes (Tensor): encoded boxes (e.g. deltas w.r.t. anchors = targets)
+            pred_bboxes (Tensor): encoded boxes (e.g. deltas w.r.t. anchors)
             bboxes (List[Tensor]): reference boxes (e.g. anchors)
             
         Returns:

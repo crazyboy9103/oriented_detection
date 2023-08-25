@@ -2,7 +2,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 
 class LinearWarmUpMultiStepDecay(_LRScheduler):
     def __init__(self, optimizer, milestones, gamma=0.1, warmup_iters=5, warmup_start_lr=0, last_epoch=-1, verbose=False):
-        # milestones: list of epoch indices to decay LR
+        # milestones: list of steps to decay LR
         # gamma: decay factor
         # warmup_iters: number of epochs for warmup
         # warmup_start_lr: initial learning rate for warmup

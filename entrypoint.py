@@ -9,8 +9,6 @@ from rotated_faster_rcnn import RotatedFasterRCNN
 from datasets.mvtec import MVTecDataModule
 from datasets.dota import DotaDataModule
 
-
-
 def main(args):
     train_loader_kwargs = dict(
         batch_size=args.batch_size, 
@@ -27,8 +25,6 @@ def main(args):
 
     if args.dataset == 'dota':
         datamodule = DotaDataModule(
-            "oc",
-            "xyxy",
             "./datasets/dota.pth",
             "/mnt/d/datasets/split_ss_dota",
             train_loader_kwargs,
@@ -37,8 +33,6 @@ def main(args):
     
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
-            "oc", 
-            "xyxy", 
             "./datasets/mvtec.pth", 
             "/mnt/d/datasets/split_ss_mvtec", 
             train_loader_kwargs, 
@@ -50,6 +44,7 @@ def main(args):
         
     elif args.model_type == 'oriented':
         model = OrientedRCNN()
+    
     else:
         raise ValueError("Invalid model type!")
     
@@ -92,7 +87,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
     parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
-                        help='Type of model to train (rotated or oriented)')
+                        help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
     parser.add_argument('--project_name', type=str, default='orcnn-implement')
     parser.add_argument('--experiment_name', type=str, default='test upload', help='Leave blank to use default')

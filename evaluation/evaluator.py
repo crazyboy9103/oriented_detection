@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-# mmrotate/core/evaluation/eval_map.py
+# Adapted from mmrotate/core/evaluation/eval_map.py
 from multiprocessing import get_context
 
 import numpy as np
@@ -153,7 +153,8 @@ def get_cls_results(det_results, annotations, class_id):
         tuple[list[np.ndarray]]: detected bboxes, gt bboxes
     """
     cls_dets = [img_res[class_id] for img_res in det_results]
-    cls_dets = list(filter(lambda x: len(x), cls_dets))
+    cls_dets = [det for det in cls_dets if det]
+    # cls_dets = list(filter(lambda x: len(x), cls_dets))
     
     cls_gts = []
     for ann in annotations:
@@ -316,12 +317,16 @@ def print_map_summary(mean_ap,
         
     num_classes = len(results)
 
+    precisions = np.zeros((num_scales, num_classes), dtype=np.float32)
     recalls = np.zeros((num_scales, num_classes), dtype=np.float32)
     aps = np.zeros((num_scales, num_classes), dtype=np.float32)
     num_gts = np.zeros((num_scales, num_classes), dtype=int)
     mious = np.zeros((num_scales, num_classes), dtype=np.float32)
     mod_mious = np.zeros((num_scales, num_classes), dtype=np.float32)
     for i, cls_result in enumerate(results):
+        if cls_result['precision'].size > 0:
+            precisions[:, i] = np.array(cls_result['precision'], ndmin=2)[:, -1]
+            
         if cls_result['recall'].size > 0:
             recalls[:, i] = np.array(cls_result['recall'], ndmin=2)[:, -1]
         aps[:, i] = cls_result['ap']
@@ -334,20 +339,20 @@ def print_map_summary(mean_ap,
     if not isinstance(mean_ap, list):
         mean_ap = [mean_ap]
 
-    header = ['class', 'gts', 'dets', 'recall', 'ap', 'miou', 'mod_miou', 'mod_miou/miou']
+    header = ['class', 'gts', 'dets', 'recall', 'precision', 'ap', 'miou', 'mod_miou', 'mod_miou/miou']
     for i in range(num_scales):
         table_data = [header]
         fracs = np.nan_to_num(mod_mious / mious)
         for j in range(num_classes):
             row_data = [
                 label_names[j], num_gts[i, j], results[j]['num_dets'],
-                f'{recalls[i, j]:.3f}', f'{aps[i, j]:.3f}', f'{mious[i, j]:.3f}', f'{mod_mious[i, j]:.3f}', f'{fracs[i, j]:.3f}'
+                f'{recalls[i, j]:.3f}',  f'{precisions[i, j]:.3f}',  f'{aps[i, j]:.3f}', f'{mious[i, j]:.3f}', f'{mod_mious[i, j]:.3f}', f'{fracs[i, j]:.3f}'
             ]
             table_data.append(row_data)
         miou = float(np.mean(mious, 1)[0])
         mmiou = float(np.mean(mod_mious, 1)[0])
         frac = float(np.mean(fracs, 1)[0])
-        table_data.append(['mAP|mIoU|mmIoU|mmIoU/mIoU', '', '', '', f'{mean_ap[i]:.3f}', f'{miou:.3f}', f'{mmiou:.3f}', f'{frac:.3f}'])
+        table_data.append(['mAP|mIoU|mmIoU|mmIoU/mIoU', '', '', '', '', f'{mean_ap[i]:.3f}', f'{miou:.3f}', f'{mmiou:.3f}', f'{frac:.3f}'])
         table = AsciiTable(table_data)
         table.inner_footing_row_border = True
         print(table.table)
