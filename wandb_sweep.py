@@ -5,7 +5,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 import wandb
 import argparse
 
-# from oriented_rcnn import OrientedRCNN
+from oriented_rcnn import OrientedRCNN
 from rotated_faster_rcnn import RotatedFasterRCNN
 from datasets.mvtec import MVTecDataModule
 from datasets.dota import DotaDataModule
@@ -29,24 +29,25 @@ def main(args):
     )
 
     if args.dataset == 'dota':
-        raise NotImplementedError
+        datamodule = DotaDataModule(
+            "./datasets/dota.pth",
+            "/mnt/d/datasets/split_ss_dota",
+            train_loader_kwargs,
+            test_loader_kwargs
+        )
     
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
-            "oc", 
-            "xyxy", 
             "./datasets/mvtec.pth", 
             args.data_path, 
             train_loader_kwargs, 
             test_loader_kwargs
         )
-#     wandb.require(experiment="service")
 
     if args.model_type == 'rotated':
         model = RotatedFasterRCNN(config)
     elif args.model_type == 'oriented':
-        # model = OrientedRCNN()
-        raise NotImplementedError
+        model = OrientedRCNN(config)
     else:
         raise ValueError("Invalid model type!")
     

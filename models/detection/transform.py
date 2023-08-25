@@ -296,15 +296,12 @@ class GeneralizedRCNNTransform(nn.Module):
         direction = self.torch_choice(['horizontal', 'vertical', 'diagonal'])
         
         if direction == 'horizontal':
-            # image = torch.flip(image, [1])
             image = TF.hflip(image)
             
         elif direction == 'vertical':
-            # image = torch.flip(image, [0])
             image = TF.vflip(image)
              
         elif direction == 'diagonal':
-            # image = torch.flip(image, [0, 1])
             image = TF.vflip(TF.hflip(image))
         
         if "bboxes" in target:
