@@ -147,7 +147,6 @@ class OrientedRCNN(LightningModule):
         targets = [{k: v for k, v in t.items()} for t in targets]
         loss_dict, outputs = self(images, targets)
         
-        # TODO use evaluation metric mAP to save best model
         loss = sum(loss.item() for loss in loss_dict.values())
         
         for k, v in loss_dict.items():
