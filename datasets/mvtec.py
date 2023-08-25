@@ -53,9 +53,6 @@ class MVTecDataModule(pl.LightningDataModule):
         self.train_dataset = None
         self.test_dataset = None
         
-    def prepare_data(self) -> None:
-        pass
-
     def setup(self, stage: Literal["fit", "test"] = "fit") -> None:
         self.train_dataset = MVTecDataset(
             save_dir = self.save_dir,

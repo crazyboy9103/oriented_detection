@@ -7,7 +7,7 @@ from torch import Tensor
 
 class BaseBoxCoder(metaclass=ABCMeta):
     """
-    Abstract base class for box encoders.
+    Abstract base class for boxcoders.
     
     Args:
         weights (List[float]): weights for box parameters used during encoding and decoding
@@ -76,15 +76,12 @@ class BaseBoxCoder(metaclass=ABCMeta):
         )
         boxes_per_image = [b.size(0) for b in bboxes]
         concat_boxes = torch.cat(bboxes, dim=0)
-        box_sum = 0
-        for val in boxes_per_image:
-            box_sum += val
+        box_sum = sum(boxes_per_image)
         if box_sum > 0:
             pred_bboxes = pred_bboxes.reshape(box_sum, -1)
             
         concat_boxes = concat_boxes.to(pred_bboxes.dtype)
         weights = self._make_weights_compatible(concat_boxes)
-        
         pred_bboxes = self.decode_single(pred_bboxes, concat_boxes, weights, box_sum)
         return pred_bboxes
 

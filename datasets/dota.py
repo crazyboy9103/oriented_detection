@@ -1,4 +1,4 @@
-from typing import  Literal, Callable, Optional, Dict, Any
+from typing import  Literal, Dict, Any
 
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
@@ -49,11 +49,8 @@ class DotaDataModule(pl.LightningDataModule):
         
         self.train_loader_kwargs = train_loader_kwargs
         self.test_loader_kwargs = test_loader_kwargs
-    def prepare_data(self) -> None:
-        pass
 
     def setup(self, stage: Literal["fit", "test"] = "fit") -> None:
-        # if stage == "fit":
         self.train_dataset = DotaDataset(
             save_dir = self.save_dir,
             data_path = self.data_path,
@@ -62,7 +59,6 @@ class DotaDataModule(pl.LightningDataModule):
             split = "train",
         )
 
-        # if stage == "test":
         self.test_dataset = DotaDataset(
             save_dir = self.save_dir,
             data_path = self.data_path,

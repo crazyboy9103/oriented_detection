@@ -75,20 +75,6 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_h = torch.exp(dh) * heights[:, None]
     pred_a = da
     
-    # TODO : check if this is necessary & fix it
-    # angle_cond = (0 < pred_a) & (pred_a <= torch.pi / 2)
-    # while not angle_cond.all():
-    #     pred_a = torch.where(torch.isclose(pred_a, torch.tensor(-torch.pi / 2)), torch.pi / 2, pred_a)
-        
-    #     pred_a = torch.where(angle_cond, pred_a, pred_a + torch.pi / 2)
-    #     temp_w = torch.where(angle_cond, pred_w, pred_h)
-    #     temp_h = torch.where(angle_cond, pred_h, pred_w)
-        
-    #     pred_w = temp_w
-    #     pred_h = temp_h
-    #     angle_cond = (0 < pred_a) & (pred_a <= torch.pi / 2)
-    # assert ((0 < pred_a) & (pred_a <= np.pi / 2)).all()
-    
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes
 

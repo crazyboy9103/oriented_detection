@@ -25,15 +25,15 @@ def encode_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     ww = weights[2]
     wh = weights[3]
     
-    bboxes_x1 = bboxes[:, 0].unsqueeze(1)
-    bboxes_y1 = bboxes[:, 1].unsqueeze(1)
-    bboxes_x2 = bboxes[:, 2].unsqueeze(1)
-    bboxes_y2 = bboxes[:, 3].unsqueeze(1)
+    bboxes_x1 = bboxes[:, 0]
+    bboxes_y1 = bboxes[:, 1]
+    bboxes_x2 = bboxes[:, 2]
+    bboxes_y2 = bboxes[:, 3]
 
-    gt_bboxes_x1 = gt_bboxes[:, 0].unsqueeze(1)
-    gt_bboxes_y1 = gt_bboxes[:, 1].unsqueeze(1)
-    gt_bboxes_x2 = gt_bboxes[:, 2].unsqueeze(1)
-    gt_bboxes_y2 = gt_bboxes[:, 3].unsqueeze(1)
+    gt_bboxes_x1 = gt_bboxes[:, 0]
+    gt_bboxes_y1 = gt_bboxes[:, 1]
+    gt_bboxes_x2 = gt_bboxes[:, 2]
+    gt_bboxes_y2 = gt_bboxes[:, 3]
 
     # implementation starts here
     ex_widths = bboxes_x2 - bboxes_x1
@@ -51,6 +51,11 @@ def encode_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     targets_dw = ww * torch.log(gt_widths / ex_widths)
     targets_dh = wh * torch.log(gt_heights / ex_heights)
 
+    targets_dx.unsqueeze_(1)
+    targets_dy.unsqueeze_(1)
+    targets_dw.unsqueeze_(1)
+    targets_dh.unsqueeze_(1)
+    
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh), dim=1)
     return targets
 
