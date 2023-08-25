@@ -4,8 +4,6 @@
 #include "ROIAlignRotated/ROIAlignRotated.h"
 #include "box_iou_rotated/box_iou_rotated.h"
 #include "nms_rotated/nms_rotated.h"
-// #include "common/roi_align_rotated_cuda_kernel.cuh"
-// #include "common/box_iou_rotated_cuda_kernel.cuh"
 
 namespace detectron2 {
 

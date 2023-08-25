@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops import MultiScaleRoIAlign
+from torchvision.models.detection.generalized_rcnn import GeneralizedRCNN
 from torchvision.models.detection.faster_rcnn import TwoMLPHead, FastRCNNConvFCHead
 from torchvision.models.detection.anchor_utils import AnchorGenerator
 # Backbones
