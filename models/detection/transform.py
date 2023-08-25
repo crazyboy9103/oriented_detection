@@ -278,8 +278,11 @@ class GeneralizedRCNNTransform(nn.Module):
         if target is None:
             return image, target
 
-        target["bboxes"] = _resize_boxes(target["bboxes"], (h, w), image.shape[-2:])
-        target["oboxes"] = _resize_oboxes(target["oboxes"], (h, w), image.shape[-2:])
+        if "bboxes" in target:
+            target["bboxes"] = _resize_boxes(target["bboxes"], (h, w), image.shape[-2:])
+        
+        if "oboxes" in target:
+            target["oboxes"] = _resize_oboxes(target["oboxes"], (h, w), image.shape[-2:])
         return image, target
     
     def flip_bboxes(
@@ -303,9 +306,11 @@ class GeneralizedRCNNTransform(nn.Module):
         elif direction == 'diagonal':
             # image = torch.flip(image, [0, 1])
             image = TF.vflip(TF.hflip(image))
-            
-        target["bboxes"] = _flip_boxes(target["bboxes"], image.shape[-2:], direction)
-        target["oboxes"] = _flip_oboxes(target["oboxes"], image.shape[-2:], direction)
+        
+        if "bboxes" in target:
+            target["bboxes"] = _flip_boxes(target["bboxes"], image.shape[-2:], direction)
+        if "oboxes" in target:
+            target["oboxes"] = _flip_oboxes(target["oboxes"], image.shape[-2:], direction)
         return image, target
 
     # _onnx_batch_images() is an implementation of
@@ -368,8 +373,11 @@ class GeneralizedRCNNTransform(nn.Module):
         if self.training:
             return result
         for i, (pred, im_s, o_im_s) in enumerate(zip(result, image_shapes, original_image_sizes)):
-            result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
-            result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
+            if "bboxes" in result[i]:
+                result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
+            
+            if "oboxes" in result[i]:
+                result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)
         return result
     
     @staticmethod

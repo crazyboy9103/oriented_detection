@@ -312,7 +312,7 @@ def rotated_fasterrcnn_resnet50_fpn(
     )
 
     if weights:
-        model_state_dict = model.state_dict()
+        model_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
         trained_state_dict = weights.get_state_dict(progress=progress)
         for k, tensor in model_state_dict.items():
             trained_tensor = trained_state_dict.get(k, None)

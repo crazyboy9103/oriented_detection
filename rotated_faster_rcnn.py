@@ -171,7 +171,7 @@ class RotatedFasterRCNN(LightningModule):
             0.5,
             True
         )
-        print(map)
+        self.log('valid-mAP', map)
         self.outputs = []
         self.targets = []
         

@@ -126,7 +126,7 @@ class OrientedRegionProposalNetwork(nn.Module):
         self.box_coder = MidpointBoxCoder(weights=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0))
 
         # used during training
-        self.box_similarity = box_ops.box_iou
+        self.box_similarity = box_ops.box_iou_rotated
 
         self.proposal_matcher = det_utils.Matcher(
             fg_iou_thresh,
@@ -158,23 +158,24 @@ class OrientedRegionProposalNetwork(nn.Module):
     ) -> Tuple[List[Tensor], List[Tensor]]:
 
         labels = []
-        matched_gt_boxes = []
+        matched_gt_oboxes = []
         for anchors_per_image, targets_per_image in zip(anchors, targets):
-            gt_boxes = targets_per_image["bboxes"]
+            gt_oboxes = targets_per_image["oboxes"]
 
-            if gt_boxes.numel() == 0:
+            if gt_oboxes.numel() == 0:
                 # Background image (negative example)
                 device = anchors_per_image.device
-                matched_gt_boxes_per_image = torch.zeros(anchors_per_image.shape, dtype=torch.float32, device=device)
+                matched_gt_oboxes_per_image = torch.zeros(anchors_per_image.shape, dtype=torch.float32, device=device)
                 labels_per_image = torch.zeros((anchors_per_image.shape[0],), dtype=torch.float32, device=device)
             else:
-                match_quality_matrix = self.box_similarity(gt_boxes, anchors_per_image)
+                anchors_per_image = box_ops.hbb2obb(anchors_per_image)
+                match_quality_matrix = self.box_similarity(gt_oboxes, anchors_per_image)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
                 # get the targets corresponding GT for each proposal
                 # NB: need to clamp the indices because we can have a single
                 # GT in the image, and matched_idxs can be -2, which goes
                 # out of bounds
-                matched_gt_boxes_per_image = gt_boxes[matched_idxs.clamp(min=0)]
+                matched_gt_oboxes_per_image = gt_oboxes[matched_idxs.clamp(min=0)]
 
                 labels_per_image = matched_idxs >= 0
                 labels_per_image = labels_per_image.to(dtype=torch.float32)
@@ -188,8 +189,8 @@ class OrientedRegionProposalNetwork(nn.Module):
                 labels_per_image[inds_to_discard] = -1.0
 
             labels.append(labels_per_image)
-            matched_gt_boxes.append(matched_gt_boxes_per_image)
-        return labels, matched_gt_boxes
+            matched_gt_oboxes.append(matched_gt_oboxes_per_image)
+        return labels, matched_gt_oboxes
 
     def _get_top_n_idx(self, objectness: Tensor, num_anchors_per_level: List[int]) -> Tensor:
         r = []

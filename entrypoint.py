@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-# from oriented_rcnn import OrientedRCNN
+from oriented_rcnn import OrientedRCNN
 from rotated_faster_rcnn import RotatedFasterRCNN
 from datasets.mvtec import MVTecDataModule
 from datasets.dota import DotaDataModule
@@ -49,8 +49,7 @@ def main(args):
         model = RotatedFasterRCNN()
         
     elif args.model_type == 'oriented':
-        # model = OrientedRCNN()
-        raise NotImplementedError
+        model = OrientedRCNN()
     else:
         raise ValueError("Invalid model type!")
     
@@ -92,10 +91,10 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
-    parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated', 'oriented'],
+    parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
                         help='Type of model to train (rotated or oriented)')
     parser.add_argument('--wandb', action='store_true', default=True)
-    parser.add_argument('--project_name', type=str, default='rfrcnn-implement')
+    parser.add_argument('--project_name', type=str, default='orcnn-implement')
     parser.add_argument('--experiment_name', type=str, default='test upload', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)

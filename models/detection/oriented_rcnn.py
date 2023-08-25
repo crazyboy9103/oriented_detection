@@ -26,9 +26,10 @@ from torchvision.models.resnet import (
     ResNet152_Weights
 )
 
-from .roi_heads import RoIHeads
+from .oriented_roi_heads import RoIHeads
 from .oriented_rpn import OrientedRPNHead, OrientedRegionProposalNetwork
 from .transform import GeneralizedRCNNTransform
+from ops.poolers import MultiScaleRotatedRoIAlign
 
 def _default_anchor_generator():
     sizes = ((4,8,16,32,64,),)*5# ((4,), (8,), (16,), (32,), (64,),)
@@ -111,7 +112,7 @@ class OrientedRCNN(GeneralizedRCNN):
         rpn_positive_fraction=0.5,
         rpn_score_thresh=0.0,
         # Box parameters
-        box_roi_pool: nn.Module = MultiScaleRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
+        box_roi_pool: nn.Module = MultiScaleRotatedRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
         box_head: nn.Module = None,
         box_predictor: nn.Module = None,
         box_score_thresh=0.05,
@@ -195,15 +196,6 @@ class OrientedRCNN(GeneralizedRCNN):
                 torch._assert(False, "targets should not be none when in training mode")
             else:
                 for target in targets:
-                    boxes = target["bboxes"]
-                    if isinstance(boxes, torch.Tensor):
-                        torch._assert(
-                            len(boxes.shape) == 2 and boxes.shape[-1] == 4,
-                            f"Expected target boxes to be a tensor of shape [N, 4], got {boxes.shape}.",
-                        )
-                    else:
-                        torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(boxes)}.")
-                        
                     oboxes = target["oboxes"]
                     if isinstance(oboxes, torch.Tensor):
                         torch._assert(
@@ -311,7 +303,7 @@ def oriented_rcnn_resnet50_fpn(
     )
 
     if weights:
-        model_state_dict = model.state_dict()
+        model_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
         trained_state_dict = weights.get_state_dict(progress=progress)
         for k, tensor in model_state_dict.items():
             trained_tensor = trained_state_dict.get(k, None)

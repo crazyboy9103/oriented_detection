@@ -47,6 +47,11 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor, proj_xy: b
     targets_dh = wh * torch.log(gt_heights / ex_heights)
     targets_da = wa * (gt_angles - ex_angles)
     
+    targets_dx.unsqueeze_(1)
+    targets_dy.unsqueeze_(1)
+    targets_dw.unsqueeze_(1)
+    targets_dh.unsqueeze_(1)
+    targets_da.unsqueeze_(1)
     targets = torch.cat([targets_dx, targets_dy, targets_dw, targets_dh, targets_da], dim=1)
     return targets
 
