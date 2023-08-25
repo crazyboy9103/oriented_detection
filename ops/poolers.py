@@ -8,6 +8,7 @@ from torch import Tensor
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from torch.nn.modules.utils import _pair
+from torch.jit.annotations import BroadcastingList2
 import torchvision
 from torchvision.utils import _log_api_usage_once
 from torchvision.ops import roi_align
@@ -15,104 +16,167 @@ from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, 
 
 from detectron2._C import roi_align_rotated_backward, roi_align_rotated_forward
 
-class _ROIAlignRotated(Function):
-    @staticmethod
-    def forward(ctx, input, roi, output_size, spatial_scale, sampling_ratio):
-        ctx.save_for_backward(roi)
-        ctx.output_size = _pair(output_size)
-        ctx.spatial_scale = spatial_scale
-        ctx.sampling_ratio = sampling_ratio
-        ctx.input_shape = input.size()
-        output = roi_align_rotated_forward(
-            input, roi, spatial_scale, output_size[0], output_size[1], sampling_ratio
-        )
-        return output
+# class _ROIAlignRotated(Function):
+#     @staticmethod
+#     def forward(ctx, input, roi, output_size, spatial_scale, sampling_ratio):
+#         ctx.save_for_backward(roi)
+#         ctx.output_size = _pair(output_size)
+#         ctx.spatial_scale = spatial_scale
+#         ctx.sampling_ratio = sampling_ratio
+#         ctx.input_shape = input.size()
+#         output = roi_align_rotated_forward(
+#             input, roi, spatial_scale, output_size[0], output_size[1], sampling_ratio
+#         )
+#         return output
 
-    @staticmethod
-    @once_differentiable
-    def backward(ctx, grad_output):
-        (rois,) = ctx.saved_tensors
-        output_size = ctx.output_size
-        spatial_scale = ctx.spatial_scale
-        sampling_ratio = ctx.sampling_ratio
-        bs, ch, h, w = ctx.input_shape
-        grad_input = roi_align_rotated_backward(
-            grad_output,
-            rois,
-            spatial_scale,
-            output_size[0],
-            output_size[1],
-            bs,
-            ch,
-            h,
-            w,
-            sampling_ratio,
-        )
-        return grad_input, None, None, None, None, None
-
-
-roi_align_rotated = _ROIAlignRotated.apply
+#     @staticmethod
+#     @once_differentiable
+#     def backward(ctx, grad_output):
+#         (rois,) = ctx.saved_tensors
+#         output_size = ctx.output_size
+#         spatial_scale = ctx.spatial_scale
+#         sampling_ratio = ctx.sampling_ratio
+#         bs, ch, h, w = ctx.input_shape
+#         grad_input = roi_align_rotated_backward(
+#             grad_output,
+#             rois,
+#             spatial_scale,
+#             output_size[0],
+#             output_size[1],
+#             bs,
+#             ch,
+#             h,
+#             w,
+#             sampling_ratio,
+#         )
+#         return grad_input, None, None, None, None, None
 
 
-class ROIAlignRotated(nn.Module):
-    def __init__(self, output_size, spatial_scale, sampling_ratio):
-        """
-        Args:
-            output_size (tuple): h, w
-            spatial_scale (float): scale the input boxes by this number
-            sampling_ratio (int): number of inputs samples to take for each output
-                sample. 0 to take samples densely.
-
-        Note:
-            ROIAlignRotated supports continuous coordinate by default:
-            Given a continuous coordinate c, its two neighboring pixel indices (in our
-            pixel model) are computed by floor(c - 0.5) and ceil(c - 0.5). For example,
-            c=1.3 has pixel neighbors with discrete indices [0] and [1] (which are sampled
-            from the underlying signal at continuous coordinates 0.5 and 1.5).
-        """
-        super(ROIAlignRotated, self).__init__()
-        self.output_size = output_size
-        self.spatial_scale = spatial_scale
-        self.sampling_ratio = sampling_ratio
+# roi_align_rotated = _ROIAlignRotated.apply
 
 
-    def forward(self, input, rois):
-        """
-        Args:
-            input: NCHW images
-            rois: Bx6 boxes. First column is the index into N.
-                The other 5 columns are (x_ctr, y_ctr, width, height, angle_degrees).
-        """
-        assert rois.dim() == 2 and rois.size(1) == 6
-        orig_dtype = input.dtype
-        if orig_dtype == torch.float16:
-            input = input.float()
-            rois = rois.float()
-        output_size = _pair(self.output_size)
+# class ROIAlignRotated(nn.Module):
+#     def __init__(self, output_size, spatial_scale, sampling_ratio):
+#         """
+#         Args:
+#             output_size (tuple): h, w
+#             spatial_scale (float): scale the input boxes by this number
+#             sampling_ratio (int): number of inputs samples to take for each output
+#                 sample. 0 to take samples densely.
 
-        # Scripting for Autograd is currently unsupported.
-        # This is a quick fix without having to rewrite code on the C++ side
-        if torch.jit.is_scripting() or torch.jit.is_tracing():
-            return roi_align_rotated_forward(
-                input, rois, self.spatial_scale, output_size[0], output_size[1], self.sampling_ratio
-            ).to(dtype=orig_dtype)
-
-        return roi_align_rotated(
-            input, rois, self.output_size, self.spatial_scale, self.sampling_ratio
-        ).to(dtype=orig_dtype)
+#         Note:
+#             ROIAlignRotated supports continuous coordinate by default:
+#             Given a continuous coordinate c, its two neighboring pixel indices (in our
+#             pixel model) are computed by floor(c - 0.5) and ceil(c - 0.5). For example,
+#             c=1.3 has pixel neighbors with discrete indices [0] and [1] (which are sampled
+#             from the underlying signal at continuous coordinates 0.5 and 1.5).
+#         """
+#         super(ROIAlignRotated, self).__init__()
+#         self.output_size = output_size
+#         self.spatial_scale = spatial_scale
+#         self.sampling_ratio = sampling_ratio
 
 
-    def __repr__(self):
-        tmpstr = self.__class__.__name__ + "("
-        tmpstr += "output_size=" + str(self.output_size)
-        tmpstr += ", spatial_scale=" + str(self.spatial_scale)
-        tmpstr += ", sampling_ratio=" + str(self.sampling_ratio)
-        tmpstr += ")"
-        return tmpstr
+#     def forward(self, input, rois):
+#         """
+#         Args:
+#             input: NCHW images
+#             rois: Bx6 boxes. First column is the index into N.
+#                 The other 5 columns are (x_ctr, y_ctr, width, height, angle_degrees).
+#         """
+#         assert rois.dim() == 2 and rois.size(1) == 6
+#         orig_dtype = input.dtype
+#         if orig_dtype == torch.float16:
+#             input = input.float()
+#             rois = rois.float()
+#         output_size = _pair(self.output_size)
+
+#         # Scripting for Autograd is currently unsupported.
+#         # This is a quick fix without having to rewrite code on the C++ side
+#         if torch.jit.is_scripting() or torch.jit.is_tracing():
+#             return roi_align_rotated_forward(
+#                 input, rois, self.spatial_scale, output_size[0], output_size[1], self.sampling_ratio
+#             ).to(dtype=orig_dtype)
+
+#         return roi_align_rotated(
+#             input, rois, self.output_size, self.spatial_scale, self.sampling_ratio
+#         ).to(dtype=orig_dtype)
 
 
-# Adapted from torchvision.ops.poolers
+#     def __repr__(self):
+#         tmpstr = self.__class__.__name__ + "("
+#         tmpstr += "output_size=" + str(self.output_size)
+#         tmpstr += ", spatial_scale=" + str(self.spatial_scale)
+#         tmpstr += ", sampling_ratio=" + str(self.sampling_ratio)
+#         tmpstr += ")"
+#         return tmpstr
 
+
+# Adapted from torchvision.ops.poolers, roi_align
+def check_roi_boxes_shape(boxes: Union[Tensor, List[Tensor]]):
+    if isinstance(boxes, (list, tuple)):
+        for _tensor in boxes:
+            torch._assert(
+                _tensor.size(1) == 5, "The shape of the tensor in the boxes list is not correct as List[Tensor[L, 5]]"
+            )
+    elif isinstance(boxes, torch.Tensor):
+        torch._assert(boxes.size(1) == 6, "The boxes tensor shape is not correct as Tensor[K, 6]")
+    else:
+        torch._assert(False, "boxes is expected to be a Tensor[L, 5] or a List[Tensor[K, 6]]")
+    return
+
+@torch.fx.wrap
+def rotated_roi_align(
+    input: Tensor,
+    boxes: Union[Tensor, List[Tensor]],
+    output_size: BroadcastingList2[int],
+    spatial_scale: float = 1.0,
+    sampling_ratio: int = -1,
+) -> Tensor:
+    """
+    Performs Region of Interest (RoI) Align operator with average pooling, as described in Mask R-CNN.
+
+    Args:
+        input (Tensor[N, C, H, W]): The input tensor, i.e. a batch with ``N`` elements. Each element
+            contains ``C`` feature maps of dimensions ``H x W``.
+            If the tensor is quantized, we expect a batch size of ``N == 1``.
+        boxes (Tensor[K, 5] or List[Tensor[L, 4]]): the box coordinates in (x1, y1, x2, y2)
+            format where the regions will be taken from.
+            The coordinate must satisfy ``0 <= x1 < x2`` and ``0 <= y1 < y2``.
+            If a single Tensor is passed, then the first column should
+            contain the index of the corresponding element in the batch, i.e. a number in ``[0, N - 1]``.
+            If a list of Tensors is passed, then each Tensor will correspond to the boxes for an element i
+            in the batch.
+        output_size (int or Tuple[int, int]): the size of the output (in bins or pixels) after the pooling
+            is performed, as (height, width).
+        spatial_scale (float): a scaling factor that maps the box coordinates to
+            the input coordinates. For example, if your boxes are defined on the scale
+            of a 224x224 image and your input is a 112x112 feature map (resulting from a 0.5x scaling of
+            the original image), you'll want to set this to 0.5. Default: 1.0
+        sampling_ratio (int): number of sampling points in the interpolation grid
+            used to compute the output value of each pooled output bin. If > 0,
+            then exactly ``sampling_ratio x sampling_ratio`` sampling points per bin are used. If
+            <= 0, then an adaptive number of grid points are used (computed as
+            ``ceil(roi_width / output_width)``, and likewise for height). Default: -1
+        aligned (bool): If False, use the legacy implementation.
+            If True, pixel shift the box coordinates it by -0.5 for a better alignment with the two
+            neighboring pixel indices. This version is used in Detectron2
+
+    Returns:
+        Tensor[K, C, output_size[0], output_size[1]]: The pooled RoIs.
+    """
+    if not torch.jit.is_scripting() and not torch.jit.is_tracing():
+        _log_api_usage_once(roi_align)
+        
+    check_roi_boxes_shape(boxes)
+    rois = boxes
+    output_size = _pair(output_size)
+    if not isinstance(rois, torch.Tensor):
+        rois = _convert_to_roi_format(rois)
+    return roi_align_rotated_forward(
+        input, rois, spatial_scale, output_size[0], output_size[1], sampling_ratio
+    ) 
+    
 def box_area(box: Tensor):
     """
     Args:
@@ -227,11 +291,12 @@ def _multiscale_rotated_roi_align(
     num_levels = len(x_filtered)
     rois = _convert_to_roi_format(boxes)
     if num_levels == 1:
-        rroi_align = ROIAlignRotated(output_size, scales[0], sampling_ratio)
-        
-        return rroi_align(
+        return rotated_roi_align(
             x_filtered[0],
             rois,
+            output_size, 
+            scales[0], 
+            sampling_ratio
         )
 
     levels = mapper(boxes)
@@ -254,11 +319,13 @@ def _multiscale_rotated_roi_align(
     for level, (per_level_feature, scale) in enumerate(zip(x_filtered, scales)):
         idx_in_level = torch.where(levels == level)[0]
         rois_per_level = rois[idx_in_level]
-        rroi_align = ROIAlignRotated(output_size, scale, sampling_ratio)
         
-        result_idx_in_level = rroi_align(
+        result_idx_in_level = rotated_roi_align(
             per_level_feature,
             rois_per_level,
+            output_size, 
+            scale, 
+            sampling_ratio
         )
 
         if torchvision._is_tracing():
