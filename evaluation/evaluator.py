@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from terminaltables import AsciiTable
 
-from ops.boxes import box_iou_rotated
+from ops import boxes as box_ops
 
 def average_precision(recalls, precisions, mode='area'):
     """Calculate average precision (for single or multiple scales).
@@ -99,7 +99,7 @@ def tpfp_default(det_bboxes,
         return tp, fp, ious_to_return, det_angles_to_return, gt_angles_to_return
         
     
-    ious = box_iou_rotated(
+    ious = box_ops.box_iou_rotated(
         torch.from_numpy(det_bboxes[:, :5]),
         torch.from_numpy(gt_bboxes)
     ).numpy()
@@ -245,7 +245,7 @@ def eval_rbbox_map(det_results,
         nonzero_gt_angles = gt_angles[ious != 0].copy()
         
         abs_diff_angle = np.abs(nonzero_det_angles - nonzero_gt_angles)
-        # 𝑑(𝐼𝑜𝑈,𝜃_𝑔𝑡, 𝜃_𝑑𝑡)=𝐼𝑜𝑈/(1+ln(|𝜃_𝑔𝑡−𝜃_𝑑𝑡 |+1))
+        # 𝑑(𝐼𝑜𝑈,𝜃_𝑔𝑡, 𝜃_𝑑𝑡)=𝐼𝑜𝑈/(1+ln(|𝜃_𝑔𝑡−𝜃_𝑑𝑡|+1))
         modulated_ious = nonzero_ious / (1 + np.log(abs_diff_angle+1))
         # calculate recall and precision with tp and fp
         tp = np.cumsum(tp, axis=1)

@@ -3,6 +3,7 @@ import argparse
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.profilers import AdvancedProfiler
 
 from configs import TrainConfig, ModelConfig, Kwargs
 from lightning_modules import RotatedFasterRCNN, OrientedRCNN
@@ -71,10 +72,10 @@ def main(args):
         rpn_score_thresh = 0,
         box_score_thresh = 0.05,
         box_nms_thresh = 0.5,
-        box_detections_per_img = 200,
+        box_detections_per_img = 100,
         box_fg_iou_thresh = 0.5,
         box_bg_iou_thresh = 0.5,
-        box_batch_size_per_image = 512,
+        box_batch_size_per_image = 256,
         box_positive_fraction = 0.25,
         bbox_reg_weights = (10, 10, 5, 5, 10)
     )
@@ -120,6 +121,8 @@ def main(args):
         ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-loss", mode="min"),
         LearningRateMonitor(logging_interval='step')
     ]
+
+    profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
     
     trainer = pl.Trainer(
         logger=logger, 
@@ -128,10 +131,10 @@ def main(args):
         precision=args.precision,
         benchmark=False,
         deterministic=False,
-        profiler="pytorch",
+        profiler=profiler,
         # fast_dev_run=True,
         # accelerator="cpu",
-        # detect_anomaly=True,
+        detect_anomaly=True,
         callbacks=callbacks,
     )
     trainer.fit(
@@ -144,14 +147,14 @@ if __name__ == '__main__':
     parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated', 'oriented'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
-    parser.add_argument('--project_name', type=str, default='orcnn-implement')
-    parser.add_argument('--experiment_name', type=str, default='test upload', help='Leave blank to use default')
+    parser.add_argument('--project_name', type=str, default='rfrcnn-implement')
+    parser.add_argument('--experiment_name', type=str, default='dota512_16bit', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--num_epochs', type=int, default=24)
     parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
-    parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--precision', type=str, default='16', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     args = parser.parse_args()
     main(args)

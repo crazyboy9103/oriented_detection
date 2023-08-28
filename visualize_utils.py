@@ -6,7 +6,7 @@ import torch
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 
-from ops.boxes import obb2poly
+from ops import boxes as box_ops
 from datasets.mvtec import MVTecDataset
 from datasets.dota import DotaDataset
 
@@ -45,7 +45,7 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
         omask = dt_oscores > o_score_threshold
 
         dt_oboxes = dt_oboxes[omask].cpu()
-        dt_opolys = obb2poly(dt_oboxes).to(int).tolist()
+        dt_opolys = box_ops.obb2poly(dt_oboxes).to(int).tolist()
         dt_olabels = dt_olabels[omask].cpu().tolist()
         dt_oscores = dt_oscores[omask].cpu().tolist()
 
