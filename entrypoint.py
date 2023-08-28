@@ -26,8 +26,8 @@ def main(args):
 
     if args.dataset == 'dota':
         datamodule = DotaDataModule(
-            "./datasets/dota_512.pth",
-            "/mnt/d/datasets/split_ss_dota_512",
+            "./datasets/dota_256.pth",
+            "/mnt/d/datasets/split_ss_dota_256",
             train_loader_kwargs,
             test_loader_kwargs
         )
@@ -56,8 +56,8 @@ def main(args):
     )
     
     model_config = ModelConfig(
-        min_size = 512,
-        max_size = 512,
+        min_size = 256,
+        max_size = 256,
         image_mean = dataset.IMAGE_MEAN,
         image_std = dataset.IMAGE_STD,
         rpn_pre_nms_top_n_train = 2000,

@@ -17,7 +17,7 @@ Cython==3.0.0
 dbus-python==1.2.16
 debugpy==1.6.7.post1
 decorator==5.1.1
--e git+https://github.com/crazyboy9103/oriented_detection@676f8b6cc496d7e4d6dfeee8b22abd0eafb65d01#egg=detectron2
+-e .
 distro-info==0.23+ubuntu1.1
 docker-pycreds==0.4.0
 dulwich==0.21.5
