@@ -6,62 +6,12 @@ from torch import nn, Tensor
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import OBoxCoder
-
-class FocalLoss(nn.Module):
-    def __init__(self, weight=None, gamma=2, reduction='mean'):
-        super(FocalLoss, self).__init__()
-        self.weight = weight #weight parameter will act as the alpha parameter to balance class weights
-        self.gamma = gamma
-        self.reduction = reduction
-        
-    def forward(self, input, target):
-        ce_loss = F.cross_entropy(input, target, reduction=self.reduction, weight=self.weight)
-        pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
-        return focal_loss
-    
-def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_targets):
-    # type: (Tensor, Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor, Tensor]
-    """
-    Computes the loss for Oriented R-CNN.
-
-    Args:
-        class_logits (Tensor)
-        obox_regression (Tensor)
-        labels (list[BoxList])
-        obox_regression_targets (Tensor)
-        
-    Returns:
-        classification_loss (Tensor)
-        obox_loss (Tensor)
-    """
-   
-    N, num_classes = class_logits.shape
-    
-    labels = torch.cat(labels, dim=0)
-    try:
-        # classification_loss = F.cross_entropy(class_logits, labels)
-        classification_loss = FocalLoss()(class_logits, labels)
-    except:
-        classification_loss = torch.tensor(0.0)
-        
-    pos_inds = torch.where(labels > 0)[0]
-    labels_pos = labels[pos_inds]
-    obox_regression_targets = torch.cat(obox_regression_targets, dim=0)
-    obox_regression = obox_regression.reshape(N, obox_regression.size(-1) // 5, 5)
-    obox_loss = F.smooth_l1_loss(
-        obox_regression[pos_inds, labels_pos],
-        obox_regression_targets[pos_inds],
-        beta=1.0 / 9,
-        reduction="mean",
-    )
-    # box_loss = box_loss / labels.numel()
-    return classification_loss, obox_loss
+from models.detection.boxcoders import XYWHA_XYWHA_BoxCoder
+from models.detection.losses import oriented_rcnn_loss
 
 class RoIHeads(nn.Module):
     __annotations__ = {
-        "obox_coder": OBoxCoder,
+        "obox_coder": XYWHA_XYWHA_BoxCoder,
         "proposal_matcher": det_utils.Matcher,
         "fg_bg_sampler": det_utils.BalancedPositiveNegativeSampler,
     }
@@ -98,7 +48,7 @@ class RoIHeads(nn.Module):
         if bbox_reg_weights is None:
             bbox_reg_weights = (1, 1, 1, 1, 1)
         
-        self.obox_coder = OBoxCoder(bbox_reg_weights)
+        self.obox_coder = XYWHA_XYWHA_BoxCoder(bbox_reg_weights)
         
         self.box_roi_pool = box_roi_pool
         self.box_head = box_head
@@ -347,8 +297,6 @@ class RoIHeads(nn.Module):
                     }
                 )
     
-            # print("class_logits", class_logits.shape)
-            # print("sampled_idxs", sampled_idxs)
             valid_logits = []
             valid_obox = []
             for img_id, img_sampled_idxs in enumerate(sampled_idxs):

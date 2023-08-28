@@ -10,12 +10,11 @@ from .base import BaseBoxCoder
 @torch.jit._script_if_tracing
 def encode_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     """
-    Encode a set of proposals with respect to some
-    reference boxes
+    Encode a set of gt boxes with respect to anchor boxes
 
     Args:
-        gt_bboxes (Tensor[-1, 4]): reference boxes
-        bboxes (Tensor[-1, 4]): boxes to be encoded
+        gt_bboxes (Tensor[-1, 4]): ground-truth boxes
+        bboxes (Tensor[-1, 4]): anchor boxes
         weights (Tensor[4]): the weights for ``(x, y, w, h)``
     """
 
@@ -61,6 +60,15 @@ def encode_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
 
 @torch.jit._script_if_tracing
 def decode_boxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
+    """
+    Decode box predictions with respect to anchor boxes
+    
+    Args:
+        pred_bboxes (Tensor[-1, 4]): concatenated predicted box locations (dx1, dy1, dw1, dh1, dx2, dy2, dw2, dh2, ...)
+        bboxes (Tensor[-1, 4]): anchor boxes
+        weights (Tensor[4]): the weights for ``(x, y, w, h)``
+        bbox_xform_clip (float): maximum allowed box prediction
+    """
     widths = bboxes[:, 2] - bboxes[:, 0]
     heights = bboxes[:, 3] - bboxes[:, 1]
     ctr_x = bboxes[:, 0] + 0.5 * widths
@@ -92,7 +100,7 @@ def decode_boxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfor
     pred_boxes = torch.stack((pred_boxes1, pred_boxes2, pred_boxes3, pred_boxes4), dim=2).flatten(1)
     return pred_boxes 
 
-class BoxCoder(BaseBoxCoder):
+class XYXY_XYWH_BoxCoder(BaseBoxCoder):
     """
     Equivalent to torchvision BoxCoder
 
@@ -108,7 +116,7 @@ class BoxCoder(BaseBoxCoder):
             weights (4-element tuple) : Scaling factors used to scale (dx, dy, dw, dh) deltas
             bbox_xform_clip (float)
         """
-        super(BoxCoder, self).__init__(weights)
+        super(XYXY_XYWH_BoxCoder, self).__init__(weights)
 
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         targets = encode_boxes(gt_bboxes, bboxes, weights)

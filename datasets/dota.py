@@ -6,15 +6,18 @@ from torch.utils.data import DataLoader
 from .base import BaseDataset, collate_fn
 
 class DotaDataset(BaseDataset):
-    CLASSES = ('plane', 'baseball-diamond', 'bridge', 'ground-track-field',
+    CLASSES = ('background', 'plane', 'baseball-diamond', 'bridge', 'ground-track-field',
                'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
                'basketball-court', 'storage-tank', 'soccer-ball-field',
                'roundabout', 'harbor', 'swimming-pool', 'helicopter', 'container-crane')
 
-    PALETTE = [(165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
+    PALETTE = [(255, 255, 255), (165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
                (138, 43, 226), (255, 128, 0), (255, 0, 255), (0, 255, 255),
                (255, 193, 193), (0, 51, 153), (255, 250, 205), (0, 139, 139),
                (255, 255, 0), (147, 116, 116), (0, 0, 255), (0, 128, 128)]
+    
+    IMAGE_MEAN = (123.675 / 255, 116.28 / 255, 103.53 / 255)
+    IMAGE_STD = (58.395 / 255, 57.12 / 255, 57.375 / 255)
     
     def __init__(
         self, 

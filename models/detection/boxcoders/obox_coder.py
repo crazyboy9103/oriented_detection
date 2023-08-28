@@ -88,7 +88,7 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     return pred_boxes
 
 
-class OBoxCoder(BaseBoxCoder):
+class XYWHA_XYWHA_BoxCoder(BaseBoxCoder):
     def __init__(self, weights: Tuple[float, float, float, float, float]):
         """
         Encodes obox (cx, cy, w, h, a) into delta (dx, dy, dw, dh, da), and
@@ -100,7 +100,7 @@ class OBoxCoder(BaseBoxCoder):
         Args:
             weights (Tuple[float, float, float, float, float]): weights for (dx, dy, dw, dh, da)
         """
-        super(OBoxCoder, self).__init__(weights)
+        super(XYWHA_XYWHA_BoxCoder, self).__init__(weights)
 
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         assert gt_bboxes.size(0) == bboxes.size(0)

@@ -1,99 +1,63 @@
 from dataclasses import dataclass, asdict
-from typing import Optional, Tuple, Literal
+from typing import Optional
 
 import torch
 import torch.optim as optim
 from pytorch_lightning import LightningModule
 import wandb 
 
+from configs import TrainConfig, ModelConfig, Kwargs
 from datasets.dota import DotaDataset
 from datasets.mvtec import MVTecDataset
-from models.detection.oriented_rcnn import oriented_rcnn_resnet50_fpn
+from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
 from scheduler import CosineAnnealingWarmUpRestartsDecay, LinearWarmUpMultiStepDecay
 from evaluation.evaluator import eval_rbbox_map
 from visualize_utils import plot_image
 
-@dataclass
-class MvtecDataConfig:
-    image_mean: Tuple[float, float, float] = (
-        211.35 / 255, 166.559 / 255, 97.271 / 255)
-    image_std: Tuple[float, float, float] = (
-        43.849 / 255, 40.172 / 255, 30.459 / 255)
-
-@dataclass
-class DotaDataConfig:
-    image_mean: Tuple[float, float, float] = (
-        123.675 / 255, 116.28 / 255, 103.53 / 255)
-    image_std: Tuple[float, float, float] = (
-        58.395 / 255, 57.12 / 255, 57.375 / 255)
-
-@dataclass
-class TrainConfig:
-    pretrained: bool = True
-    pretrained_backbone: bool = True
-    progress: bool = True
-    num_classes: int = 13 + 1
-    trainable_backbone_layers: Literal[0, 1, 2, 3, 4, 5] = 4
-    version: Literal[1, 2] = 2 # TODO: version 1
-    learning_rate: float = 0.0001
-
-@dataclass
-class OrientedRCNNConfig:
-    # transform parameters
-    min_size: int = 480
-    max_size: int = 640
-    image_mean: Optional[Tuple[float, float, float]] = None
-    image_std: Optional[Tuple[float, float, float]] = None
-    # RPN parameters
-    rpn_pre_nms_top_n_train: int = 2000
-    rpn_pre_nms_top_n_test: int = 2000
-    rpn_post_nms_top_n_train: int = 2000
-    rpn_post_nms_top_n_test: int = 2000
-    rpn_nms_thresh: float = 0.7
-    rpn_fg_iou_thresh: float = 0.7
-    rpn_bg_iou_thresh: float = 0.3
-    rpn_batch_size_per_image: int = 256
-    rpn_positive_fraction: float = 0.5
-    rpn_score_thresh: float = 0.0
-    # R-CNN parameters
-    box_score_thresh: float = 0.05
-    box_nms_thresh: float = 0.5
-    box_detections_per_img: int = 200 # 200
-    box_fg_iou_thresh: float = 0.5
-    box_bg_iou_thresh: float = 0.5
-    box_batch_size_per_image: int = 512
-    box_positive_fraction: float = 0.25
-    bbox_reg_weights: Optional[Tuple[float, float, float, float, float]] = (10, 10, 5, 5, 10)
-
-@dataclass
-class Kwargs:
-    _skip_flip: bool = False
-    _skip_image_transform: bool = False
-
-class OrientedRCNN(LightningModule):
-    def __init__(self, config: Optional[dict] = None):
-        super(OrientedRCNN, self).__init__()       
-        self.train_config = asdict(TrainConfig())
+class ModelWrapper(LightningModule):
+    def __init__(
+        self, 
+        config: Optional[dict] = None,
+        train_config: Optional[dataclass] = None, 
+        model_config: Optional[dataclass] = None,
+        kwargs: Optional[dataclass] = None,
+        dataset: DotaDataset|MVTecDataset = MVTecDataset
+    ):
+        super(ModelWrapper, self).__init__()
         
-        data_config = asdict(MvtecDataConfig())
-        self.rfrcnn_config = asdict(OrientedRCNNConfig(**data_config))
-        self.kwargs = asdict(Kwargs())
+        if train_config is None:
+            train_config = TrainConfig()
+        
+        if model_config is None:
+            model_config = ModelConfig(
+                image_mean=dataset.IMAGE_MEAN,
+                image_std=dataset.IMAGE_STD,
+            )
+        
+        if kwargs is None:
+            kwargs = Kwargs()
+         
+        self.train_config = asdict(train_config)
+        self.model_config = asdict(model_config)
+        self.kwargs = asdict(kwargs)
+        self.dataset = dataset
         
         if config:
             self.config = self._parse_config(config)
-            self.train_config.update({k: v for k, v in self.config.items() if k in self.train_config})
-            self.rfrcnn_config.update({k: v for k, v in self.config.items() if k in self.rfrcnn_config})
-            self.kwargs.update({k: v for k, v in self.config.items() if k in self.kwargs})
             
-        self.model = oriented_rcnn_resnet50_fpn(**self.train_config, **self.rfrcnn_config, kwargs=self.kwargs)
+            self.train_config.update({k: v for k, v in self.config.items() if k in self.train_config})
+            self.model_config.update({k: v for k, v in self.config.items() if k in self.model_config})
+            self.kwargs.update({k: v for k, v in self.config.items() if k in self.kwargs})
+        
         self.lr = self.train_config['learning_rate']
-
+        
         self.outputs = []
         self.targets = []
+        
     
     def _parse_config(self, config):
         # Avoid in place modification
-        # As wandb config does not accept boolean values, must be manually converted
+        # As wandb config does not accept boolean values, they must be manually converted
         config = dict(config.items())
         for k, v in config.items():
             if k in ("pretrained", "pretrained_backbone", "_skip_flip", "_skip_image_transform"):
@@ -102,7 +66,7 @@ class OrientedRCNN(LightningModule):
                 
     def setup(self, stage: Optional[str] = None):
         self.logger.experiment.config.update(self.train_config)
-        self.logger.experiment.config.update(self.rfrcnn_config)
+        self.logger.experiment.config.update(self.model_config)
         self.logger.experiment.config.update(self.kwargs)
         
     def put_outputs(self, outputs):
@@ -139,7 +103,6 @@ class OrientedRCNN(LightningModule):
         for k, v in loss_dict.items():
             self.log(f'train-{k}', v.item())
         self.log('train-loss', loss.item())
-        # self.save_hyperparameters()
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -156,7 +119,7 @@ class OrientedRCNN(LightningModule):
         if not hasattr(self, 'config') and batch_idx == 0:
             self.logger.experiment.log({
                 "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
-                        for pil_image, image_path in (plot_image(image, output, target, MVTecDataset, 0.5, 0.5) for image, output, target in zip(images, outputs, targets))]
+                        for pil_image, image_path in (plot_image(image, output, target, self.dataset, 0.5, 0.5) for image, output, target in zip(images, outputs, targets))]
             })
             
         self.put_outputs(outputs)
@@ -185,3 +148,29 @@ class OrientedRCNN(LightningModule):
             "interval": "step",
         }
         return [optimizer], [scheduler_config]
+
+
+class RotatedFasterRCNN(ModelWrapper):
+    def __init__(
+        self, 
+        config: Optional[dict] = None,
+        train_config: Optional[dataclass] = None, 
+        model_config: Optional[dataclass] = None,
+        kwargs: Optional[dataclass] = None,
+        dataset: DotaDataset|MVTecDataset = MVTecDataset
+    ):
+        super(RotatedFasterRCNN, self).__init__(config, train_config, model_config, kwargs, dataset)
+        self.model = faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
+
+class OrientedRCNN(ModelWrapper):
+    def __init__(
+        self, 
+        config: Optional[dict] = None,
+        train_config: Optional[dataclass] = None, 
+        model_config: Optional[dataclass] = None,
+        kwargs: Optional[dataclass] = None,
+        dataset: DotaDataset|MVTecDataset = MVTecDataset
+    ):
+        super(OrientedRCNN, self).__init__(config, train_config, model_config, kwargs, dataset)
+        self.model = oriented_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
+    

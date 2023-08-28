@@ -78,7 +78,7 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes
 
-class HBoxCoder(BaseBoxCoder):
+class XYXY_XYWHA_BoxCoder(BaseBoxCoder):
     def __init__(self, weights: Tuple[float, float, float, float, float], bbox_xform_clip: float = math.log(1000.0 / 16)):
         """
         Encodes bbox (x1, y1, x2, y2) into delta (dx, dy, dw, dh, da), and
@@ -90,7 +90,7 @@ class HBoxCoder(BaseBoxCoder):
         Args:
             weights (Tuple[float, float, float, float, float]): weights for (dx, dy, dw, dh, da)
         """
-        super(HBoxCoder, self).__init__(weights)
+        super(XYXY_XYWHA_BoxCoder, self).__init__(weights)
 
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         assert gt_bboxes.size(0) == bboxes.size(0)

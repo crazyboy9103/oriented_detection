@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Tuple
 import glob 
 import os
 
@@ -8,13 +8,16 @@ from torch.utils.data import Dataset
 from torchvision.io import read_image, ImageReadMode
 from tqdm import tqdm 
 
-from ops.boxes import poly2obb_np, poly2hbb_np
+from ops import boxes as box_ops
 # TODO: this consumes enormous amount of memory for datasets like DOTA with large number of instances,
 # need to find a way to reduce memory usage
 class BaseDataset(Dataset):
     CLASSES = ()
 
     PALETTE = []
+    
+    IMAGE_MEAN: Tuple[float, float, float] 
+    IMAGE_STD: Tuple[float, float, float]
     
     def __init__(self, 
                  save_dir: str,
@@ -96,8 +99,8 @@ class BaseDataset(Dataset):
                     
                     poly = np.array(bbox_info[:8], dtype=np.float32)
                     try:
-                        obb = poly2obb_np(poly)
-                        hbb = poly2hbb_np(poly)
+                        obb = box_ops.poly2obb_np(poly)
+                        hbb = box_ops.poly2hbb_np(poly)
                         assert hbb[2] > hbb[0] and hbb[3] > hbb[1], "hbb must be valid"
                         
                         if not obb:

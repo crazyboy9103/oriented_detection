@@ -4,10 +4,10 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-from oriented_rcnn import OrientedRCNN
-from rotated_faster_rcnn import RotatedFasterRCNN
-from datasets.mvtec import MVTecDataModule
-from datasets.dota import DotaDataModule
+from configs import TrainConfig, ModelConfig, Kwargs
+from lightning_modules import RotatedFasterRCNN, OrientedRCNN
+from datasets.mvtec import MVTecDataModule, MVTecDataset
+from datasets.dota import DotaDataModule, DotaDataset
 
 def main(args):
     train_loader_kwargs = dict(
@@ -25,12 +25,13 @@ def main(args):
 
     if args.dataset == 'dota':
         datamodule = DotaDataModule(
-            "./datasets/dota.pth",
-            "/mnt/d/datasets/split_ss_dota",
+            "./datasets/dota_512.pth",
+            "/mnt/d/datasets/split_ss_dota_512",
             train_loader_kwargs,
             test_loader_kwargs
         )
-    
+        dataset = DotaDataset
+
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
             "./datasets/mvtec.pth", 
@@ -38,12 +39,66 @@ def main(args):
             train_loader_kwargs, 
             test_loader_kwargs
         )
-        
+        dataset = MVTecDataset
+    
+    else:
+        raise ValueError("Invalid dataset!")
+    
+    train_config = TrainConfig(
+        pretrained=True,
+        pretrained_backbone=True,
+        progress=True,
+        num_classes=len(dataset.CLASSES),
+        trainable_backbone_layers=4,
+        version=2,
+        learning_rate=0.0001,
+    )
+    
+    model_config = ModelConfig(
+        min_size = 512,
+        max_size = 512,
+        image_mean = dataset.IMAGE_MEAN,
+        image_std = dataset.IMAGE_STD,
+        rpn_pre_nms_top_n_train = 2000,
+        rpn_pre_nms_top_n_test = 2000,
+        rpn_post_nms_top_n_train = 2000,
+        rpn_post_nms_top_n_test = 2000,
+        rpn_nms_thresh = 0.7,
+        rpn_fg_iou_thresh = 0.7,
+        rpn_bg_iou_thresh = 0.3,
+        rpn_batch_size_per_image = 256,
+        rpn_positive_fraction = 0.5,
+        rpn_score_thresh = 0,
+        box_score_thresh = 0.05,
+        box_nms_thresh = 0.5,
+        box_detections_per_img = 200,
+        box_fg_iou_thresh = 0.5,
+        box_bg_iou_thresh = 0.5,
+        box_batch_size_per_image = 512,
+        box_positive_fraction = 0.25,
+        bbox_reg_weights = (10, 10, 5, 5, 10)
+    )
+
+    kwargs = Kwargs(
+        _skip_flip = False,
+        _skip_image_transform = False
+    )
+    
     if args.model_type == 'rotated':
-        model = RotatedFasterRCNN()
+        model = RotatedFasterRCNN(
+            train_config=train_config,
+            model_config=model_config,
+            kwargs=kwargs,
+            dataset=dataset
+        )
         
     elif args.model_type == 'oriented':
-        model = OrientedRCNN()
+        model = OrientedRCNN(
+            train_config=train_config,
+            model_config=model_config,
+            kwargs=kwargs,
+            dataset=dataset
+        )
     
     else:
         raise ValueError("Invalid model type!")
@@ -86,7 +141,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
-    parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
+    parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated', 'oriented'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
     parser.add_argument('--project_name', type=str, default='orcnn-implement')
@@ -96,8 +151,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--num_epochs', type=int, default=24)
-    parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota'])
+    parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
-    
     args = parser.parse_args()
     main(args)

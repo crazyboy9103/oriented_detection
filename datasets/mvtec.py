@@ -17,6 +17,10 @@ class MVTecDataset(BaseDataset):
                (255, 193, 193), (0, 51, 153), (255, 250, 205), (0, 139, 139),
                (255, 255, 0)]
 
+    IMAGE_MEAN = (211.35 / 255, 166.559 / 255, 97.271 / 255)
+    IMAGE_STD = (43.849 / 255, 40.172 / 255, 30.459 / 255)
+
+
     def __init__(
         self, 
         save_dir: str = "/workspace/datasets/mvtec.pth",

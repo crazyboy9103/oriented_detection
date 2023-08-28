@@ -6,81 +6,13 @@ from torch import nn, Tensor
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import BoxCoder, HBoxCoder, OBoxCoder
-
-class FocalLoss(nn.Module):
-    def __init__(self, weight=None, gamma=2, reduction='mean'):
-        super(FocalLoss, self).__init__()
-        self.weight = weight #weight parameter will act as the alpha parameter to balance class weights
-        self.gamma = gamma
-        self.reduction = reduction
-        
-    def forward(self, input, target):
-        ce_loss = F.cross_entropy(input, target, reduction=self.reduction, weight=self.weight)
-        pt = torch.exp(-ce_loss)
-        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
-        return focal_loss
-    
-def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression, 
-                          labels, hbox_regression_targets, obox_regression_targets):
-    # type: (Tensor, Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor, Tensor]
-    """
-    Computes the loss for Rotated Faster R-CNN.
-
-    Args:
-        class_logits (Tensor)
-        hbox_regression (Tensor)
-        obox_regression (Tensor)
-        labels (list[BoxList])
-        hbox_regression_targets (Tensor)
-        obox_regression_targets (Tensor)
-        
-    Returns:
-        classification_loss (Tensor)
-        box_loss (Tensor)
-        obox_loss (Tensor)
-    """
-   
-    N, num_classes = class_logits.shape
-    
-    labels = torch.cat(labels, dim=0)
-    try:
-        # classification_loss = F.cross_entropy(class_logits, labels)
-        classification_loss = FocalLoss()(class_logits, labels)
-    except:
-        classification_loss = torch.tensor(0.0)
-        
-    pos_inds = torch.where(labels > 0)[0]
-    labels_pos = labels[pos_inds]
-    hbox_regression_targets = torch.cat(hbox_regression_targets, dim=0)
-    obox_regression_targets = torch.cat(obox_regression_targets, dim=0)
-    
-    def compute_box_loss(regression, regression_targets, horizontal=True):
-        # get indices that correspond to the regression targets for
-        # the corresponding ground truth labels, to be used with
-        # advanced indexing
-        box_dim = 4 if horizontal else 5
-        regression = regression.reshape(N, regression.size(-1) // box_dim, box_dim)
-        box_loss = F.smooth_l1_loss(
-            regression[pos_inds, labels_pos],
-            regression_targets[pos_inds],
-            beta=1.0 / 9,
-            reduction="mean",
-        )
-        # box_loss = box_loss / labels.numel()
-        return box_loss
-    # Compute for horizontal branch 
-    hbox_loss = compute_box_loss(hbox_regression, hbox_regression_targets, horizontal=True)
-    # Compute for rotated branch
-    obox_loss = compute_box_loss(obox_regression, obox_regression_targets, horizontal=False)
-    
-        
-    return classification_loss, hbox_loss, obox_loss
+from models.detection.boxcoders import XYXY_XYWH_BoxCoder, XYXY_XYWHA_BoxCoder, XYWHA_XYWHA_BoxCoder
+from models.detection.losses import rotated_fastrcnn_loss
 
 class RoIHeads(nn.Module):
     __annotations__ = {
-        "hbox_coder": HBoxCoder,
-        "box_coder": BoxCoder,
+        "hbox_coder": XYXY_XYWHA_BoxCoder,
+        "box_coder": XYXY_XYWH_BoxCoder,
         "proposal_matcher": det_utils.Matcher,
         "fg_bg_sampler": det_utils.BalancedPositiveNegativeSampler,
     }
@@ -102,7 +34,6 @@ class RoIHeads(nn.Module):
         detections_per_img,
         # Rotated Faster R-CNN inference
         nms_thresh_rotated,
-        
     ):
         super().__init__()
 
@@ -118,8 +49,8 @@ class RoIHeads(nn.Module):
         if bbox_reg_weights is None:
             bbox_reg_weights = (1, 1, 1, 1, 1)
         
-        self.hbox_coder = HBoxCoder(bbox_reg_weights)
-        self.box_coder = BoxCoder(bbox_reg_weights[:4])
+        self.hbox_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
+        self.box_coder = XYXY_XYWH_BoxCoder(bbox_reg_weights[:4])
         
         self.box_roi_pool = box_roi_pool
         self.box_head = box_head
@@ -272,6 +203,7 @@ class RoIHeads(nn.Module):
         # TODO Use rotated clipping, removing small boxes, NMS for rotated boxes
         # horizontal based can result in misaligned horizontal and rotated boxes
         box_dim = 4 if horizontal else 5
+        box_clip = box_ops.clip_boxes_to_image if horizontal else lambda x, y: x # TODO: clipping for rotated boxes
         box_coder = self.box_coder if horizontal else self.hbox_coder
         nms = box_ops.batched_nms if horizontal else box_ops.batched_nms_rotated
         nms_thresh = self.nms_thresh if horizontal else self.nms_thresh_rotated
@@ -292,10 +224,7 @@ class RoIHeads(nn.Module):
         all_scores = []
         all_labels = []
         for boxes, scores, image_shape in zip(pred_boxes_list, pred_scores_list, image_shapes):
-            if horizontal:
-                boxes = box_ops.clip_boxes_to_image(boxes, image_shape)
-            else:
-                pass
+            boxes = box_clip(boxes, image_shape)
 
             # create labels for each prediction
             labels = torch.arange(num_classes, device=device)
@@ -355,11 +284,8 @@ class RoIHeads(nn.Module):
                 if not t["labels"].dtype == torch.int64:
                     raise TypeError(f"target labels must of int64 type, instead got {t['labels'].dtype}")
 
-        temp_proposals, temp_labels, matched_idxs, sampled_idxs = self.select_training_samples(proposals, targets)
-        train_proposals, train_labels, horizontal_regression_targets, rotated_regression_targets = self.filter_training_samples(temp_proposals, temp_labels, matched_idxs, sampled_idxs, targets)
-        # proposals, matched_idxs, labels, horizontal_regression_targets, rotated_regression_targets = self.select_training_samples(proposals, targets)
-            
-        
+        train_proposals, train_labels, matched_idxs, sampled_idxs = self.select_training_samples(proposals, targets)
+        train_proposals, train_labels, horizontal_regression_targets, rotated_regression_targets = self.filter_training_samples(train_proposals, train_labels, matched_idxs, sampled_idxs, targets)
         
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
@@ -402,8 +328,6 @@ class RoIHeads(nn.Module):
                     }
                 )
     
-            # print("class_logits", class_logits.shape)
-            # print("sampled_idxs", sampled_idxs)
             valid_logits = []
             valid_hbox = []
             valid_obox = []

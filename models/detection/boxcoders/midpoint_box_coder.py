@@ -131,21 +131,21 @@ def decode_midpoint_boxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, 
     # pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes
 
-class MidpointBoxCoder(BaseBoxCoder):
+class XYWHAB_XYWHA_BoxCoder(BaseBoxCoder):
     def __init__(self, weights: Tuple[float, float, float, float, float, float]):
         """
-        Encodes rotated box (x, y, w, h, alpha, beta) into delta (dx, dy, dw, dh, da, db) using (x1, y1, x2, y2) box,
+        Encodes rotated box (cx, cy, w, h, a) into delta (dx, dy, dw, dh, da, db) using (x1, y1, x2, y2) anchor,
         decodes delta (dx, dy, dw, dh, da, db) to obox (cx, cy, w, h, a).
         # da, db are alpha and beta, the offsets from midpoints of top and right edges to the vertices of rotated box.
         # a is the obb angle. 
         
         Example: uses horizontal proposals (x1, y1, x2, y2) to encode
-        rotated ground-truth boxes (cx, cy, w, h, a, b) into delta (dx, dy, dw, dh, da, db).
+        rotated ground-truth boxes (cx, cy, w, h, a) into delta (dx, dy, dw, dh, da, db).
         
         Args:
             weights (Tuple[float, float, float, float, float, float]): weights for (dx, dy, dw, dh, da, db)
         """
-        super(MidpointBoxCoder, self).__init__(weights)
+        super(XYWHAB_XYWHA_BoxCoder, self).__init__(weights)
         
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         assert gt_bboxes.size(0) == bboxes.size(0)

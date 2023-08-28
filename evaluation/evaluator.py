@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from terminaltables import AsciiTable
 
-from detectron2._C import box_iou_rotated
+from ops.boxes import box_iou_rotated
 
 def average_precision(recalls, precisions, mode='area'):
     """Calculate average precision (for single or multiple scales).

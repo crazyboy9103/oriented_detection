@@ -32,7 +32,6 @@ from detectron2._C import (
     roi_align_rotated_backward
 )
 
-
 # TODO 
 def clip_rotated_boxes_to_image(oboxes: Tensor, size: Tuple[int, int]) -> Tensor:
     """
