@@ -1,7 +1,7 @@
 # Recommended: Dockerfile
 ```shell
 docker build -t ${DOCKER IMAGE TAG}.
-docker run -it --gpus all -v ${HOST PATH TO DATASET FOLDER}:/datasets --shm-size=8G --name ${CONTAINER NAME} rot-det 
+docker run -it -e WANDB_API_KEY="${WANDB API KEY}" --gpus all -v ${HOST PATH TO DATASET FOLDER}:/datasets --shm-size=40G --name ${CONTAINER NAME} rot-det 
 ```
 # Compile csrc
 ```shell

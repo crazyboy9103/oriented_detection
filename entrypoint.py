@@ -15,13 +15,13 @@ def main(args):
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=True, 
-        pin_memory=True
+        pin_memory=False
     )
     test_loader_kwargs = dict(
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=False, 
-        pin_memory=True
+        pin_memory=False
     )
 
     if args.dataset == 'dota':
@@ -148,11 +148,11 @@ if __name__ == '__main__':
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
     parser.add_argument('--project_name', type=str, default='rfrcnn-implement')
-    parser.add_argument('--experiment_name', type=str, default='dota512_16bit', help='Leave blank to use default')
+    parser.add_argument('--experiment_name', type=str, default='dota256_16bit', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=2)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--num_epochs', type=int, default=24)
     parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='16', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
