@@ -10,7 +10,6 @@ chardet==3.0.4
 charset-normalizer==3.2.0
 click==8.1.6
 cmake==3.27.1
-comet-ml==3.33.8
 comm==0.1.4
 configobj==5.0.8
 Cython==3.0.0
@@ -118,4 +117,3 @@ websocket-client==1.3.3
 wrapt==1.15.0
 wurlitzer==3.0.3
 yarl==1.9.2
--e .
