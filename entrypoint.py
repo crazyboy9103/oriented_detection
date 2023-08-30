@@ -26,8 +26,8 @@ def main(args):
 
     if args.dataset == 'dota':
         datamodule = DotaDataModule(
-            "./datasets/dota_256.pth",
-            "/mnt/d/datasets/split_ss_dota_256",
+            "./datasets/dota_512.pth",
+            "/mnt/d/datasets/split_ss_dota_512",
             train_loader_kwargs,
             test_loader_kwargs
         )
@@ -56,8 +56,8 @@ def main(args):
     )
     
     model_config = ModelConfig(
-        min_size = 256,
-        max_size = 256,
+        min_size = 512,
+        max_size = 512,
         image_mean = dataset.IMAGE_MEAN,
         image_std = dataset.IMAGE_STD,
         rpn_pre_nms_top_n_train = 2000,
@@ -82,15 +82,17 @@ def main(args):
 
     kwargs = Kwargs(
         _skip_flip = False,
-        _skip_image_transform = False
+        _skip_image_transform = True
     )
-    
+    datamodule.setup()
+    steps_per_epoch = len(datamodule.train_dataset) // args.batch_size
     if args.model_type == 'rotated':
         model = RotatedFasterRCNN(
             train_config=train_config,
             model_config=model_config,
             kwargs=kwargs,
-            dataset=dataset
+            dataset=dataset,
+            steps_per_epoch=steps_per_epoch
         )
         
     elif args.model_type == 'oriented':
@@ -98,7 +100,8 @@ def main(args):
             train_config=train_config,
             model_config=model_config,
             kwargs=kwargs,
-            dataset=dataset
+            dataset=dataset,
+            steps_per_epoch=steps_per_epoch
         )
     
     else:
@@ -109,7 +112,7 @@ def main(args):
         logger = WandbLogger(
             project=args.project_name,
             name=args.experiment_name,
-            log_model=True,
+            log_model=False,
             save_dir="."
         )
         logger.watch(model, log='gradients', log_freq=500, log_graph=True)
@@ -134,7 +137,7 @@ def main(args):
         profiler=profiler,
         # fast_dev_run=True,
         # accelerator="cpu",
-        detect_anomaly=True,
+        # detect_anomaly=True,
         callbacks=callbacks,
     )
     trainer.fit(
@@ -148,12 +151,12 @@ if __name__ == '__main__':
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
     parser.add_argument('--project_name', type=str, default='rfrcnn-implement')
-    parser.add_argument('--experiment_name', type=str, default='dota256_16bit', help='Leave blank to use default')
+    parser.add_argument('--experiment_name', type=str, default='dota512_16bit', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=4)
-    parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--num_epochs', type=int, default=24)
+    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='16', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     args = parser.parse_args()

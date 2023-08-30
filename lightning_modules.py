@@ -21,7 +21,8 @@ class ModelWrapper(LightningModule):
         train_config: Optional[dataclass] = None, 
         model_config: Optional[dataclass] = None,
         kwargs: Optional[dataclass] = None,
-        dataset: DotaDataset|MVTecDataset = MVTecDataset
+        dataset: DotaDataset|MVTecDataset = MVTecDataset,
+        steps_per_epoch: int = None
     ):
         super(ModelWrapper, self).__init__()
         
@@ -50,6 +51,7 @@ class ModelWrapper(LightningModule):
             self.kwargs.update({k: v for k, v in self.config.items() if k in self.kwargs})
         
         self.lr = self.train_config['learning_rate']
+        self.steps_per_epoch = steps_per_epoch
         
         self.outputs = []
         self.targets = []
@@ -108,8 +110,17 @@ class ModelWrapper(LightningModule):
     def validation_step(self, batch, batch_idx):
         images, targets = batch
         targets = [{k: v for k, v in t.items()} for t in targets]
-        loss_dict, outputs = self(images, targets)
         
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        
+        start.record()
+        loss_dict, outputs = self(images, targets)
+        end.record()
+        torch.cuda.synchronize()
+        elapsed_time = start.elapsed_time(end)
+        print(f"Elapsed time {elapsed_time:.6f}s")
+        print(f"Im/s: {len(images)/elapsed_time:.6f}")
         loss = sum(loss.item() for loss in loss_dict.values())
         
         for k, v in loss_dict.items():
@@ -140,8 +151,7 @@ class ModelWrapper(LightningModule):
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
-        steps_per_epoch = 180
-        start, end = steps_per_epoch * 20, steps_per_epoch * 22
+        start, end = self.steps_per_epoch * 8, self.steps_per_epoch * 10
         scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[start, end], gamma=1/3, warmup_iters=500)
         scheduler_config = {
             "scheduler": scheduler,
@@ -157,9 +167,10 @@ class RotatedFasterRCNN(ModelWrapper):
         train_config: Optional[dataclass] = None, 
         model_config: Optional[dataclass] = None,
         kwargs: Optional[dataclass] = None,
-        dataset: DotaDataset|MVTecDataset = MVTecDataset
+        dataset: DotaDataset|MVTecDataset = MVTecDataset,
+        steps_per_epoch: int = None
     ):
-        super(RotatedFasterRCNN, self).__init__(config, train_config, model_config, kwargs, dataset)
+        super(RotatedFasterRCNN, self).__init__(config, train_config, model_config, kwargs, dataset, steps_per_epoch)
         self.model = faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
 
 class OrientedRCNN(ModelWrapper):
@@ -169,8 +180,9 @@ class OrientedRCNN(ModelWrapper):
         train_config: Optional[dataclass] = None, 
         model_config: Optional[dataclass] = None,
         kwargs: Optional[dataclass] = None,
-        dataset: DotaDataset|MVTecDataset = MVTecDataset
+        dataset: DotaDataset|MVTecDataset = MVTecDataset,
+        steps_per_epoch: int = None
     ):
-        super(OrientedRCNN, self).__init__(config, train_config, model_config, kwargs, dataset)
+        super(OrientedRCNN, self).__init__(config, train_config, model_config, kwargs, dataset, steps_per_epoch)
         self.model = oriented_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
     
