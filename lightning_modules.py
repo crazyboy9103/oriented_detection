@@ -119,8 +119,8 @@ class ModelWrapper(LightningModule):
         end.record()
         torch.cuda.synchronize()
         elapsed_time = start.elapsed_time(end)
-        print(f"Elapsed time {elapsed_time:.6f}s")
-        print(f"Im/s: {len(images)/elapsed_time:.6f}")
+        print(f"Elapsed time {elapsed_time:.6f}ms")
+        print(f"Im/s: {len(images)/(elapsed_time / 1000):.6f}")
         loss = sum(loss.item() for loss in loss_dict.values())
         
         for k, v in loss_dict.items():
