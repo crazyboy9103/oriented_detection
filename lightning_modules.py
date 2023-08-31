@@ -51,6 +51,8 @@ class ModelWrapper(LightningModule):
             self.kwargs.update({k: v for k, v in self.config.items() if k in self.kwargs})
         
         self.lr = self.train_config['learning_rate']
+        self.total_epochs = self.kwargs['epochs']
+        
         self.steps_per_epoch = steps_per_epoch
         
         self.outputs = []
@@ -100,6 +102,8 @@ class ModelWrapper(LightningModule):
         targets = [{k: v for k, v in t.items()} for t in targets]
 
         loss_dict = self(images, targets)
+        
+        # self.current_epoch 
         loss = sum(loss for loss in loss_dict.values())
 
         for k, v in loss_dict.items():
@@ -151,7 +155,7 @@ class ModelWrapper(LightningModule):
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
-        start, end = self.steps_per_epoch * 8, self.steps_per_epoch * 10
+        start, end = self.steps_per_epoch * (self.total_epochs - 4), self.steps_per_epoch * (self.total_epochs - 2)
         scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[start, end], gamma=1/3, warmup_iters=500)
         scheduler_config = {
             "scheduler": scheduler,

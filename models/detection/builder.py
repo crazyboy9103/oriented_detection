@@ -32,7 +32,7 @@ from .transform import GeneralizedRCNNTransform
 from ops.poolers import MultiScaleRotatedRoIAlign
 
 def _default_anchor_generator():
-    sizes = ((4,8,16,32,64,),) * 5 
+    sizes = ((4, 8, 16, 32, 64,),) * 5 
     ratios = ((0.5, 1.0, 2.0),) * len(sizes)
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 

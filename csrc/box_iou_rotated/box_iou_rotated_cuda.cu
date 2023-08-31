@@ -60,6 +60,31 @@ __global__ void box_iou_rotated_cuda_kernel(
     dev_ious[offset] = single_box_iou_rotated<T>(
         block_boxes1 + threadIdx.x * 5, block_boxes2 + threadIdx.y * 5);
   }
+  //   CUDA_1D_KERNEL_LOOP(index, n_boxes1 * n_boxes2) {
+  //     int b1 = index / n_boxes2;
+  //     int b2 = index % n_boxes2;
+
+  //     int base1 = b1 * 5;
+
+  //     float block_boxes1[5];
+  //     float block_boxes2[5];
+
+  //     block_boxes1[0] = dev_boxes1[base1 + 0];
+  //     block_boxes1[1] = dev_boxes1[base1 + 1];
+  //     block_boxes1[2] = dev_boxes1[base1 + 2];
+  //     block_boxes1[3] = dev_boxes1[base1 + 3];
+  //     block_boxes1[4] = dev_boxes1[base1 + 4];
+
+  //     int base2 = b2 * 5;
+
+  //     block_boxes2[0] = dev_boxes2[base2 + 0];
+  //     block_boxes2[1] = dev_boxes2[base2 + 1];
+  //     block_boxes2[2] = dev_boxes2[base2 + 2];
+  //     block_boxes2[3] = dev_boxes2[base2 + 3];
+  //     block_boxes2[4] = dev_boxes2[base2 + 4];
+
+  //     dev_ious[index] = single_box_iou_rotated<T>(block_boxes1, block_boxes2);
+  //   }
 }
 
 at::Tensor box_iou_rotated_cuda(

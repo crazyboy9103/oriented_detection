@@ -286,6 +286,8 @@ def eval_rbbox_map(det_results,
             aps.append(cls_result['ap'])
     mean_ap = np.array(aps).mean().item() if aps else 0.0
 
+    if not eval_results:
+        return 0.0, []
     print_map_summary(
         mean_ap, eval_results, logger=logger)
 

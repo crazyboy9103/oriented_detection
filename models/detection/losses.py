@@ -41,8 +41,8 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
     
     labels = torch.cat(labels, dim=0)
     try:
-        # classification_loss = F.cross_entropy(class_logits, labels)
-        classification_loss = FocalLoss()(class_logits, labels)
+        classification_loss = F.cross_entropy(class_logits, labels)
+        # classification_loss = FocalLoss()(class_logits, labels)
     except:
         classification_loss = torch.tensor(0.0)
         
@@ -60,10 +60,10 @@ def rotated_fastrcnn_loss(class_logits, hbox_regression, obox_regression,
         box_loss = F.smooth_l1_loss(
             regression[pos_inds, labels_pos],
             regression_targets[pos_inds],
-            beta=1.0 / 9,
-            reduction="mean",
+            beta=1.0,
+            reduction="sum",
         )
-        # box_loss = box_loss / labels.numel()
+        box_loss = box_loss / labels.numel()
         return box_loss
     # Compute for horizontal branch 
     hbox_loss = compute_box_loss(hbox_regression, hbox_regression_targets, horizontal=True)
@@ -91,8 +91,8 @@ def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_ta
     
     labels = torch.cat(labels, dim=0)
     try:
-        # classification_loss = F.cross_entropy(class_logits, labels)
-        classification_loss = FocalLoss()(class_logits, labels)
+        classification_loss = F.cross_entropy(class_logits, labels)
+        # classification_loss = FocalLoss()(class_logits, labels)
     except:
         classification_loss = torch.tensor(0.0)
         
@@ -103,8 +103,8 @@ def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_ta
     obox_loss = F.smooth_l1_loss(
         obox_regression[pos_inds, labels_pos],
         obox_regression_targets[pos_inds],
-        beta=1.0 / 9,
-        reduction="mean",
+        beta=1.0,
+        reduction="sum",
     )
-    # box_loss = box_loss / labels.numel()
+    obox_loss = obox_loss / labels.numel()
     return classification_loss, obox_loss

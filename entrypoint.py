@@ -83,7 +83,8 @@ def main(args):
 
     kwargs = Kwargs(
         _skip_flip = False,
-        _skip_image_transform = True
+        _skip_image_transform = True,
+        epochs = args.num_epochs,
     )
     datamodule.setup()
     steps_per_epoch = len(datamodule.train_dataset) // args.batch_size
@@ -133,8 +134,8 @@ def main(args):
         max_epochs=args.num_epochs,
         gradient_clip_val=args.gradient_clip_val, 
         precision=args.precision,
-        benchmark=False,
-        deterministic=False,
+        benchmark=True,
+        deterministic=True,
         profiler=profiler,
         # fast_dev_run=True,
         # accelerator="cpu",
@@ -152,13 +153,13 @@ if __name__ == '__main__':
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
     parser.add_argument('--project_name', type=str, default='orcnn-implement')
-    parser.add_argument('--experiment_name', type=str, default='dota256_16bit', help='Leave blank to use default')
+    parser.add_argument('--experiment_name', type=str, default='mvtec512_32bit', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=4)
-    parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--num_epochs', type=int, default=12)
-    parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
-    parser.add_argument('--precision', type=str, default='16', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota'])
+    parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     args = parser.parse_args()
     main(args)

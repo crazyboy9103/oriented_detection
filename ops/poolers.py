@@ -17,43 +17,43 @@ from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, 
 from detectron2._C import roi_align_rotated_backward, roi_align_rotated_forward
 
 # Original implementation in detectron2.layers.roi_align_rotated
-# class _ROIAlignRotated(Function):
-#     @staticmethod
-#     def forward(ctx, input, roi, output_size, spatial_scale, sampling_ratio):
-#         ctx.save_for_backward(roi)
-#         ctx.output_size = _pair(output_size)
-#         ctx.spatial_scale = spatial_scale
-#         ctx.sampling_ratio = sampling_ratio
-#         ctx.input_shape = input.size()
-#         output = roi_align_rotated_forward(
-#             input, roi, spatial_scale, output_size[0], output_size[1], sampling_ratio
-#         )
-#         return output
+class _ROIAlignRotated(Function):
+    @staticmethod
+    def forward(ctx, input, roi, spatial_scale, output_size, sampling_ratio):
+        ctx.save_for_backward(roi)
+        ctx.output_size = _pair(output_size)
+        ctx.spatial_scale = spatial_scale
+        ctx.sampling_ratio = sampling_ratio
+        ctx.input_shape = input.size()
+        output = roi_align_rotated_forward(
+            input, roi, spatial_scale, output_size[0], output_size[1], sampling_ratio
+        )
+        return output
 
-#     @staticmethod
-#     @once_differentiable
-#     def backward(ctx, grad_output):
-#         (rois,) = ctx.saved_tensors
-#         output_size = ctx.output_size
-#         spatial_scale = ctx.spatial_scale
-#         sampling_ratio = ctx.sampling_ratio
-#         bs, ch, h, w = ctx.input_shape
-#         grad_input = roi_align_rotated_backward(
-#             grad_output,
-#             rois,
-#             spatial_scale,
-#             output_size[0],
-#             output_size[1],
-#             bs,
-#             ch,
-#             h,
-#             w,
-#             sampling_ratio,
-#         )
-#         return grad_input, None, None, None, None, None
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, grad_output):
+        (rois,) = ctx.saved_tensors
+        output_size = ctx.output_size
+        spatial_scale = ctx.spatial_scale
+        sampling_ratio = ctx.sampling_ratio
+        bs, ch, h, w = ctx.input_shape
+        grad_input = roi_align_rotated_backward(
+            grad_output,
+            rois,
+            spatial_scale,
+            output_size[0],
+            output_size[1],
+            bs,
+            ch,
+            h,
+            w,
+            sampling_ratio,
+        )
+        return grad_input, None, None, None, None, None
 
 
-# roi_align_rotated = _ROIAlignRotated.apply
+roi_align_rotated = _ROIAlignRotated.apply
 
 
 # class ROIAlignRotated(nn.Module):
@@ -100,7 +100,7 @@ from detectron2._C import roi_align_rotated_backward, roi_align_rotated_forward
 #             ).to(dtype=orig_dtype)
 
 #         return roi_align_rotated(
-#             input, rois, self.output_size, self.spatial_scale, self.sampling_ratio
+#             input, rois, self.spatial_scale, self.output_size, self.sampling_ratio
 #         ).to(dtype=orig_dtype)
 
 
@@ -174,9 +174,13 @@ def rotated_roi_align(
     output_size = _pair(output_size)
     if not isinstance(rois, torch.Tensor):
         rois = _convert_to_roi_format(rois)
-    return roi_align_rotated_forward(
-        input, rois, spatial_scale, output_size[0], output_size[1], sampling_ratio
-    ) 
+    
+    return roi_align_rotated(
+        input, rois, spatial_scale, output_size, sampling_ratio
+    )
+    # return roi_align_rotated_forward(
+    #     input, rois, spatial_scale, output_size[0], output_size[1], sampling_ratio
+    # ) 
     
 def box_area(box: Tensor):
     """

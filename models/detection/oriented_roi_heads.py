@@ -180,8 +180,7 @@ class RoIHeads(nn.Module):
         image_shapes: List[Tuple[int, int]],
     ) -> Tuple[List[Tensor], List[Tensor], List[Tensor]] :
         
-        # TODO Use rotated clipping, removing small boxes, NMS for rotated boxes
-        # horizontal based can result in misaligned horizontal and rotated boxes
+        # TODO Use rotated clipping
         box_dim = 5
         box_coder = self.obox_coder
         nms = box_ops.batched_nms_rotated

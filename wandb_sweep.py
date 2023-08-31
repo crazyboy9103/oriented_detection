@@ -16,13 +16,13 @@ def main(args):
     config = wandb.config
     
     train_loader_kwargs = dict(
-        batch_size=config.batch_size, 
+        batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=True, 
         pin_memory=False
     )
     test_loader_kwargs = dict(
-        batch_size=config.batch_size, 
+        batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=False, 
         pin_memory=False
@@ -62,12 +62,19 @@ def main(args):
         image_std = dataset.IMAGE_STD,
     )
 
+    kwargs = Kwargs()
+    
+    datamodule.setup()
+    steps_per_epoch = len(datamodule.train_dataset) // args.batch_size
+
     if args.model_type == 'rotated':
         model = RotatedFasterRCNN(
             config=config,
             train_config=train_config,
             model_config=model_config,
-            dataset=dataset
+            kwargs=kwargs,
+            dataset=dataset,
+            steps_per_epoch=steps_per_epoch
         )
         
     elif args.model_type == 'oriented':
@@ -75,7 +82,9 @@ def main(args):
             config=config,
             train_config=train_config,
             model_config=model_config,
-            dataset=dataset
+            kwargs=kwargs,
+            dataset=dataset,
+            steps_per_epoch=steps_per_epoch
         )
     
     else:
@@ -119,35 +128,34 @@ if __name__ == '__main__':
     parser.add_argument('--data_path', type=str, default='/mnt/d/datasets/split_ss_mvtec')
     parser.add_argument('--data_pth', type=str, default='./datasets/mvtec.pth')
     parser.add_argument('--sweep_name', type=str, default='first_sweep')
-    parser.add_argument('--sweep_method', type=str, default='random', choices=['random', 'grid', 'bayes'])
+    parser.add_argument('--sweep_method', type=str, default='bayes', choices=['random', 'grid', 'bayes'])
     parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
-    parser.add_argument('--num_workers', type=int, default=2)
+    parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--gradient_clip_val', type=float, default=35)
-    parser.add_argument('--num_epochs', type=int, default=24)
+    parser.add_argument('--num_epochs', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=2)
     args = parser.parse_args()
     
     sweep_config = {
         'method': args.sweep_method,
         'name': args.sweep_name,
         'metric': {
-            'goal': 'minimize',
-            'name': 'valid-loss'
+            'goal': 'maximize',
+            'name': 'valid-mAP'
         },
         'parameters': {
-            'batch_size': {'values': [2, 4]},
-            'trainable_backbone_layers': {'values': [0, 1, 2, 3, 4, 5]},
+            'trainable_backbone_layers': {'values': [3, 4, 5]},
             'learning_rate': {
                 'min': 0.00001,
-                'max': 0.1,
+                'max': 0.01,
                 'distribution': 'uniform'
             },
             'pretrained_backbone': {'values': [0, 1]},
             'pretrained': {'values': [0, 1]},
             '_skip_flip': {'values': [0, 1]},
             '_skip_image_transform': {'values': [0, 1]},
-            'box_positive_fraction': {'values': [0.25, 0.5]},
-            'box_detections_per_img': {'values': [100, 200]},
+            'version': {'values': [1, 2]}
         }
     }
     sweep_id=wandb.sweep(sweep_config, project=args.project_name)
-    wandb.agent(sweep_id=sweep_id, function=lambda: main(args), count=20)
+    wandb.agent(sweep_id=sweep_id, function=lambda: main(args), count=50)
