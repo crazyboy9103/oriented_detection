@@ -23,16 +23,13 @@ class RPNHead(nn.Module):
         conv_depth (int, optional): number of convolutions
     """
 
-    _version = 2
-
-    def __init__(self, in_channels: int, num_anchors: int, conv_depth=1) -> None:
+    def __init__(self, in_channels: int, num_anchors: int, conv_depth=1, bbox_dim=4) -> None:
         super().__init__()
-        convs = []
-        for _ in range(conv_depth):
-            convs.append(Conv2dNormActivation(in_channels, in_channels, kernel_size=3, norm_layer=None))
+        convs = [Conv2dNormActivation(in_channels, in_channels, kernel_size=3, norm_layer=None) for _ in range(conv_depth)]
         self.conv = nn.Sequential(*convs)
+        
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 4, kernel_size=1, stride=1)
+        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * bbox_dim, kernel_size=1, stride=1)
 
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
@@ -45,42 +42,10 @@ class RPNHead(nn.Module):
         bbox_reg = []
         for feature in features:
             t = self.conv(feature)
-            # TODO mmrotate adds one relu layer here
-            t = F.relu(t)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg
 
-class OrientedRPNHead(nn.Module):
-    """
-    RPN head used in Oriented R-CNN
-    """
-    def __init__(self, in_channels: int, num_anchors: int, conv_depth=1) -> None:
-        super().__init__()
-        convs = []
-        for _ in range(conv_depth):
-            convs.append(Conv2dNormActivation(in_channels, in_channels, kernel_size=3, norm_layer=None))
-        self.conv = nn.Sequential(*convs)
-        self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
-        self.bbox_pred = nn.Conv2d(in_channels, num_anchors * 6, kernel_size=1, stride=1)
-
-        for layer in self.modules():
-            if isinstance(layer, nn.Conv2d):
-                torch.nn.init.normal_(layer.weight, std=0.01)  # type: ignore[arg-type]
-                if layer.bias is not None:
-                    torch.nn.init.constant_(layer.bias, 0)  # type: ignore[arg-type]
-                    
-    def forward(self, features: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
-        logits = []
-        bbox_reg = []
-        for feature in features:
-            t = self.conv(feature)
-            # TODO mmrotate adds one relu layer here
-            t = F.relu(t)
-            logits.append(self.cls_logits(t))
-            bbox_reg.append(self.bbox_pred(t))
-        return logits, bbox_reg
-    
 # Utility Functions for RPN
 def permute_and_flatten(layer: Tensor, N: int, C: int, H: int, W: int) -> Tensor:
     layer = layer.view(N, -1, C, H, W)
@@ -389,12 +354,11 @@ class RegionProposalNetwork(nn.Module):
         # note that we detach the deltas because Faster R-CNN do not backprop through
         # the proposals
         proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
-        proposals = proposals.view(num_images, -1, self.proposal_dim if self.proposal_dim == 4 else 5)
+        proposals = proposals.view(num_images, -1, self.proposal_dim)
         boxes, scores = self.filter_proposals(proposals, objectness, images.image_sizes, num_anchors_per_level)
 
         losses = {}
         if targets is not None:
-            # num_images = len(images.image_sizes)
             losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas)
             
         else:

@@ -27,9 +27,12 @@ from torchvision.models.resnet import (
 
 from .roi_heads import RoIHeads as FasterRCNNRoIHeads
 from .oriented_roi_heads import RoIHeads as OrientedRCNNRoIHeads
-from .rpn import RPNHead, OrientedRPNHead, RegionProposalNetwork, OrientedRegionProposalNetwork
+from .rpn import RPNHead, RegionProposalNetwork, OrientedRegionProposalNetwork
 from .transform import GeneralizedRCNNTransform
 from ops.poolers import MultiScaleRotatedRoIAlign
+
+FasterRCNN_RPNHead = partial(RPNHead, bbox_dim=4)
+OrientedRCNN_RPNHead = partial(RPNHead, bbox_dim=6)
 
 def _default_anchor_generator():
     sizes = ((4, 8, 16, 32, 64,),) * 5 
@@ -221,7 +224,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
         out_channels = backbone.out_channels
         
         if rpn_head is None:
-            rpn_head = RPNHead(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
+            rpn_head = FasterRCNN_RPNHead(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
         
         if box_head is None:
             resolution = box_roi_pool.output_size[0]
@@ -350,7 +353,7 @@ class OrientedRCNN(GeneralizedRCNN):
         out_channels = backbone.out_channels
         
         if rpn_head is None:
-            rpn_head = OrientedRPNHead(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
+            rpn_head = OrientedRCNN_RPNHead(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
         
         if box_head is None:
             resolution = box_roi_pool.output_size[0]
@@ -516,5 +519,5 @@ def model_builder(
         
     return model
 
-faster_rcnn_builder = partial(model_builder, rpn_head=RPNHead, model=RotatedFasterRCNN)
-oriented_rcnn_builder = partial(model_builder, rpn_head=OrientedRPNHead, model=OrientedRCNN)
+faster_rcnn_builder = partial(model_builder, rpn_head=FasterRCNN_RPNHead, model=RotatedFasterRCNN)
+oriented_rcnn_builder = partial(model_builder, rpn_head=OrientedRCNN_RPNHead, model=OrientedRCNN)
