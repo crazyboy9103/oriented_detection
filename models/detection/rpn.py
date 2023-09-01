@@ -40,42 +40,13 @@ class RPNHead(nn.Module):
                 if layer.bias is not None:
                     torch.nn.init.constant_(layer.bias, 0)  # type: ignore[arg-type]
 
-    def _load_from_state_dict(
-        self,
-        state_dict,
-        prefix,
-        local_metadata,
-        strict,
-        missing_keys,
-        unexpected_keys,
-        error_msgs,
-    ):
-        version = local_metadata.get("version", None)
-
-        if version is None or version < 2:
-            for type in ["weight", "bias"]:
-                old_key = f"{prefix}conv.{type}"
-                new_key = f"{prefix}conv.0.0.{type}"
-                if old_key in state_dict:
-                    state_dict[new_key] = state_dict.pop(old_key)
-
-        super()._load_from_state_dict(
-            state_dict,
-            prefix,
-            local_metadata,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
-        )
-
     def forward(self, features: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
         logits = []
         bbox_reg = []
         for feature in features:
             t = self.conv(feature)
             # TODO mmrotate adds one relu layer here
-            # t = F.relu(t)
+            t = F.relu(t)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg
@@ -105,7 +76,7 @@ class OrientedRPNHead(nn.Module):
         for feature in features:
             t = self.conv(feature)
             # TODO mmrotate adds one relu layer here
-            # t = F.relu(t)
+            t = F.relu(t)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg

@@ -436,17 +436,13 @@ def model_builder(
     progress: bool = True, 
     num_classes: Optional[int] = 91,
     trainable_backbone_layers: Optional[int] = None,
-    version: Literal[1, 2] = 1,
     rpn_head: Optional[nn.Module] = None,
     model: Optional[nn.Module] = None,
     freeze_bn: bool = True,
     **kwargs
 ):
-    if version == 1 and pretrained:
-        weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1
-        weights = FasterRCNN_ResNet50_FPN_Weights.verify(weights)
-        
-    elif version == 2 and pretrained:
+
+    if pretrained:
         weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1
         weights = FasterRCNN_ResNet50_FPN_V2_Weights.verify(weights)
         
@@ -489,15 +485,10 @@ def model_builder(
     
     rpn_anchor_generator = _default_anchor_generator()
     
-    if version == 1:
-        rpn_head = rpn_head(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=1)
-        box_head = None
-        
-    elif version == 2:
-        rpn_head = rpn_head(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)
-        box_head = FastRCNNConvFCHead(
-            (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
-        )
+    rpn_head = rpn_head(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)
+    box_head = FastRCNNConvFCHead(
+        (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
+    )
     
     model = model(
         backbone,
@@ -523,11 +514,6 @@ def model_builder(
 
         model.load_state_dict(model_state_dict, strict=False)
         
-        if version == 1 and weights == FasterRCNN_ResNet50_FPN_Weights.COCO_V1:
-            for module in model.modules():
-                if isinstance(module, misc_nn_ops.FrozenBatchNorm2d):
-                    module.eps = 0.0
-            
     return model
 
 faster_rcnn_builder = partial(model_builder, rpn_head=RPNHead, model=RotatedFasterRCNN)

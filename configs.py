@@ -8,7 +8,6 @@ class TrainConfig:
     progress: bool = True
     num_classes: int = 13 + 1
     trainable_backbone_layers: Literal[0, 1, 2, 3, 4, 5] = 4
-    version: Literal[1, 2] = 2
     learning_rate: float = 0.0001
     freeze_bn: bool = True
 

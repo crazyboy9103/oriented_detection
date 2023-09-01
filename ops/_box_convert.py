@@ -35,23 +35,6 @@ def bbox_flip(bboxes, img_shape, direction='horizontal'):
     flipped[rotated_flag, 3] = bboxes[rotated_flag, 2]
     return flipped
 
-
-def poly2obb(polys, version='oc'):
-    """Convert polygons to oriented bounding boxes.
-
-    Args:
-        polys (torch.Tensor): [x0,y0,x1,y1,x2,y2,x3,y3]
-        version (Str): angle representations.
-
-    Returns:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-    """
-    if version == 'oc':
-        results = poly2obb_oc(polys)
-    else:
-        raise NotImplementedError
-    return results    
-
 def poly2hbb_np(polys):
     if polys.shape[-1] == 8:
         polys = polys.reshape(4, 2)
@@ -82,7 +65,7 @@ def hbb2obb(hbboxes):
     return torch.split(results, len(results), dim=0) if is_list else results 
 
 
-def poly2obb_oc(polys):
+def poly2obb(polys):
     """Convert polygons to oriented bounding boxes.
 
     Args:

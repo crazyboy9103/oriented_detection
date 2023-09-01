@@ -1,4 +1,4 @@
-python /workspace/wandb_sweep.py \
+TORCH_USE_CUDA_DSA=1 CUDA_LAUNCH_BLOCKING=1 python /workspace/wandb_sweep.py \
     --model_type oriented \
     --dataset mvtec \
     --project_name orcnn-sweep \

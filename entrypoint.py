@@ -51,7 +51,6 @@ def main(args):
         progress=True,
         num_classes=len(dataset.CLASSES),
         trainable_backbone_layers=4,
-        version=2,
         learning_rate=0.0001,
         freeze_bn=False
     )

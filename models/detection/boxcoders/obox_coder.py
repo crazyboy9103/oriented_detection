@@ -106,7 +106,6 @@ class XYWHA_XYWHA_BoxCoder(BaseBoxCoder):
         assert gt_bboxes.size(0) == bboxes.size(0)
         assert gt_bboxes.size(-1) == 5
         assert bboxes.size(-1) == 5
-        # TODO: implement encode_oboxes
         targets = encode_oboxes(gt_bboxes, bboxes, weights, proj_xy=True)
         return targets
     
@@ -114,7 +113,6 @@ class XYWHA_XYWHA_BoxCoder(BaseBoxCoder):
         assert pred_bboxes.size(0) == bboxes.size(0)
         if pred_bboxes.ndim == 3:
             assert pred_bboxes.size(1) == bboxes.size(1)
-        # TODO: implement decode_oboxes
         pred_bboxes = decode_oboxes(pred_bboxes, bboxes, weights, self.bbox_xform_clip, proj_xy=True)
         if box_sum > 0:
             pred_bboxes = pred_bboxes.reshape(box_sum, -1, 5)

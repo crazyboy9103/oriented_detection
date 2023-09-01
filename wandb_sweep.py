@@ -94,7 +94,7 @@ def main(args):
     logger = WandbLogger(
         project=args.project_name,
         name=args.experiment_name,
-        log_model=True,
+        log_model=False,
         save_dir="."
     )
     
@@ -112,6 +112,7 @@ def main(args):
         deterministic=True,
         profiler="pytorch",
         callbacks=callbacks,
+        detect_anomaly=True
     )
     trainer.fit(
         model, 
@@ -129,11 +130,11 @@ if __name__ == '__main__':
     parser.add_argument('--data_pth', type=str, default='./datasets/mvtec.pth')
     parser.add_argument('--sweep_name', type=str, default='first_sweep')
     parser.add_argument('--sweep_method', type=str, default='bayes', choices=['random', 'grid', 'bayes'])
-    parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--gradient_clip_val', type=float, default=35)
-    parser.add_argument('--num_epochs', type=int, default=12)
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--num_epochs', type=int, default=2)
+    parser.add_argument('--batch_size', type=int, default=8)
     args = parser.parse_args()
     
     sweep_config = {
@@ -154,7 +155,6 @@ if __name__ == '__main__':
             'pretrained': {'values': [0, 1]},
             '_skip_flip': {'values': [0, 1]},
             '_skip_image_transform': {'values': [0, 1]},
-            'version': {'values': [1, 2]},
             'freeze_bn': {'values': [0, 1]},
         }
     }
