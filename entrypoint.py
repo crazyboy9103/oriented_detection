@@ -53,6 +53,7 @@ def main(args):
         trainable_backbone_layers=4,
         version=2,
         learning_rate=0.0001,
+        freeze_bn=False
     )
     
     model_config = ModelConfig(
@@ -153,7 +154,7 @@ if __name__ == '__main__':
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
     parser.add_argument('--project_name', type=str, default='orcnn-implement')
-    parser.add_argument('--experiment_name', type=str, default='mvtec512_32bit', help='Leave blank to use default')
+    parser.add_argument('--experiment_name', type=str, default='mvtec256_16bit', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=16)

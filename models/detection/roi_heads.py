@@ -47,7 +47,7 @@ class RoIHeads(nn.Module):
         self.batch_size_per_image = batch_size_per_image
         
         if bbox_reg_weights is None:
-            bbox_reg_weights = (1, 1, 1, 1, 1)
+            bbox_reg_weights = (10, 10, 5, 5, 10)
         
         self.hbox_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
         self.box_coder = XYXY_XYWH_BoxCoder(bbox_reg_weights[:4])
@@ -77,10 +77,7 @@ class RoIHeads(nn.Module):
                 labels_in_image = torch.zeros((proposals_in_image.shape[0],), dtype=torch.int64, device=device)
             else:
                 if not horizontal:
-                    # Need to convert horizontal proposals to rotated proposals with angles=0, as
-                    # rotated gt_boxes are in rotated format (cx, cy, w, h, a)
-                    # proposals are in horizontal format (x1, y1, x2, y2)
-                    # TODO support le90 and le135
+                    # Need to convert horizontal proposals to rotated proposals with angles=0
                     proposals_in_image = box_ops.hbb2obb(proposals_in_image)
                     
                 match_quality_matrix = box_similarity(gt_boxes_in_image, proposals_in_image)

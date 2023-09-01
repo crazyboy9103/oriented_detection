@@ -130,10 +130,10 @@ if __name__ == '__main__':
     parser.add_argument('--sweep_name', type=str, default='first_sweep')
     parser.add_argument('--sweep_method', type=str, default='bayes', choices=['random', 'grid', 'bayes'])
     parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--gradient_clip_val', type=float, default=35)
-    parser.add_argument('--num_epochs', type=int, default=10)
-    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--num_epochs', type=int, default=12)
+    parser.add_argument('--batch_size', type=int, default=16)
     args = parser.parse_args()
     
     sweep_config = {
@@ -145,17 +145,18 @@ if __name__ == '__main__':
         },
         'parameters': {
             'trainable_backbone_layers': {'values': [3, 4, 5]},
-            'learning_rate': {
-                'min': 0.00001,
-                'max': 0.01,
-                'distribution': 'uniform'
-            },
+            'learning_rate': {'values': [0.00001, 0.0001, 0.001, 0.01]},
+                # 'min': 0.0001,
+                # 'max': 0.001,
+                # 'distribution': 'uniform'
+
             'pretrained_backbone': {'values': [0, 1]},
             'pretrained': {'values': [0, 1]},
             '_skip_flip': {'values': [0, 1]},
             '_skip_image_transform': {'values': [0, 1]},
-            'version': {'values': [1, 2]}
+            'version': {'values': [1, 2]},
+            'freeze_bn': {'values': [0, 1]},
         }
     }
     sweep_id=wandb.sweep(sweep_config, project=args.project_name)
-    wandb.agent(sweep_id=sweep_id, function=lambda: main(args), count=50)
+    wandb.agent(sweep_id=sweep_id, function=lambda: main(args), count=200)

@@ -439,29 +439,48 @@ def model_builder(
     version: Literal[1, 2] = 1,
     rpn_head: Optional[nn.Module] = None,
     model: Optional[nn.Module] = None,
+    freeze_bn: bool = True,
     **kwargs
 ):
     if version == 1 and pretrained:
         weights = FasterRCNN_ResNet50_FPN_Weights.COCO_V1
         weights = FasterRCNN_ResNet50_FPN_Weights.verify(weights)
+        
     elif version == 2 and pretrained:
         weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1
         weights = FasterRCNN_ResNet50_FPN_V2_Weights.verify(weights)
+        
     else:
         weights = None
-        
-    if weights and num_classes is None:
-        num_classes = len(weights.meta["categories"])
-        
-    weights_backbone = ResNet50_Weights.IMAGENET1K_V1 if pretrained_backbone else None
-    weights_backbone = ResNet50_Weights.verify(weights_backbone)
+   
+    # TODO 
+    # if weights and num_classes is None:
+    #     num_classes = len(weights.meta["categories"])
     
+    if not weights and pretrained_backbone:
+        weights_backbone = ResNet50_Weights.IMAGENET1K_V1
     
-    is_backbone_trained = weights_backbone is not None
+    else:
+        weights_backbone = None
+        
     is_faster_rcnn_trained = weights is not None
+    is_backbone_trained = weights_backbone is not None or weights is not None
     
-    backbone_norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_backbone_trained else nn.BatchNorm2d
-    fast_rcnn_norm_layer = misc_nn_ops.FrozenBatchNorm2d if is_faster_rcnn_trained else nn.BatchNorm2d
+    if freeze_bn:
+        if not is_faster_rcnn_trained:
+            print("WARNING: pretrained weights are not used for training, freeze_bn is ignored.")
+            fast_rcnn_norm_layer = nn.BatchNorm2d
+        else:
+            fast_rcnn_norm_layer = misc_nn_ops.FrozenBatchNorm2d
+
+        if not is_backbone_trained:
+            print("WARNING: pretrained backbone weights are not used for training, freeze_bn is ignored.")
+            backbone_norm_layer = nn.BatchNorm2d
+        else:
+            backbone_norm_layer = misc_nn_ops.FrozenBatchNorm2d
+    else:
+        fast_rcnn_norm_layer = nn.BatchNorm2d
+        backbone_norm_layer = nn.BatchNorm2d
     
     trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=5, default_value=3)
 
@@ -471,7 +490,7 @@ def model_builder(
     rpn_anchor_generator = _default_anchor_generator()
     
     if version == 1:
-        rpn_head = None
+        rpn_head = rpn_head(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=1)
         box_head = None
         
     elif version == 2:
@@ -490,7 +509,7 @@ def model_builder(
     )
 
     if weights:
-        model_state_dict = {k: v.clone() for k, v in model.state_dict().items()}
+        model_state_dict = model.state_dict()
         trained_state_dict = weights.get_state_dict(progress=progress)
         for k, tensor in model_state_dict.items():
             trained_tensor = trained_state_dict.get(k, None)

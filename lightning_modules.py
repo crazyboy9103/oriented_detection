@@ -13,7 +13,8 @@ from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
 from scheduler import CosineAnnealingWarmUpRestartsDecay, LinearWarmUpMultiStepDecay
 from evaluation.evaluator import eval_rbbox_map
 from visualize_utils import plot_image
-
+        
+        
 class ModelWrapper(LightningModule):
     def __init__(
         self, 
@@ -64,7 +65,7 @@ class ModelWrapper(LightningModule):
         # As wandb config does not accept boolean values, they must be manually converted
         config = dict(config.items())
         for k, v in config.items():
-            if k in ("pretrained", "pretrained_backbone", "_skip_flip", "_skip_image_transform"):
+            if k in ("pretrained", "pretrained_backbone", "_skip_flip", "_skip_image_transform", "freeze_bn"):
                 config[k] = bool(v)
         return config
                 
@@ -123,14 +124,16 @@ class ModelWrapper(LightningModule):
         end.record()
         torch.cuda.synchronize()
         elapsed_time = start.elapsed_time(end)
-        print(f"Elapsed time {elapsed_time:.6f}ms")
-        print(f"Im/s: {len(images)/(elapsed_time / 1000):.6f}")
+        self.log('infer time/image (ms)', elapsed_time / len(images))
+        print(f"FPS: {len(images)/(elapsed_time / 1000):.6f}")
         loss = sum(loss.item() for loss in loss_dict.values())
         
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
             
         self.log('valid-loss', loss)
+        
+        # skip image logging for sweeps
         if not hasattr(self, 'config') and batch_idx == 0:
             self.logger.experiment.log({
                 "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
@@ -155,8 +158,10 @@ class ModelWrapper(LightningModule):
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
-        start, end = self.steps_per_epoch * (self.total_epochs - 4), self.steps_per_epoch * (self.total_epochs - 2)
-        scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[start, end], gamma=1/3, warmup_iters=500)
+        # following milestones, warmup_iters are arbitrarily chosen
+        first, second = self.steps_per_epoch * int(self.total_epochs * 4/6), self.steps_per_epoch * int(self.total_epochs * 5/6)
+        warmup_iters = self.steps_per_epoch * int(self.total_epochs * 1/6)
+        scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[first, second], gamma=1/3, warmup_iters=warmup_iters)
         scheduler_config = {
             "scheduler": scheduler,
             "interval": "step",
