@@ -1,5 +1,6 @@
 import argparse
 
+import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -11,6 +12,8 @@ from datasets.mvtec import MVTecDataModule, MVTecDataset
 from datasets.dota import DotaDataModule, DotaDataset
 
 def main(args):
+    torch.set_float32_matmul_precision("medium")
+    
     train_loader_kwargs = dict(
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
@@ -26,8 +29,8 @@ def main(args):
 
     if args.dataset == 'dota':
         datamodule = DotaDataModule(
-            "./datasets/dota_256.pth",
-            "/mnt/d/datasets/split_ss_dota_256",
+            f"./datasets/dota_{args.image_size}.pth",
+            f"/mnt/d/datasets/split_ss_dota_{args.image_size}",
             train_loader_kwargs,
             test_loader_kwargs
         )
@@ -45,19 +48,20 @@ def main(args):
     else:
         raise ValueError("Invalid dataset!")
     
+
     train_config = TrainConfig(
-        pretrained=True,
-        pretrained_backbone=True,
+        pretrained=args.pretrained,
+        pretrained_backbone=args.pretrained_backbone,
         progress=True,
         num_classes=len(dataset.CLASSES),
-        trainable_backbone_layers=4,
-        learning_rate=0.0001,
-        freeze_bn=False
+        trainable_backbone_layers=args.trainable_backbone_layers,
+        learning_rate=args.learning_rate,
+        freeze_bn=args.freeze_bn
     )
     
     model_config = ModelConfig(
-        min_size = 256,
-        max_size = 256,
+        min_size = args.image_size,
+        max_size = args.image_size,
         image_mean = dataset.IMAGE_MEAN,
         image_std = dataset.IMAGE_STD,
         rpn_pre_nms_top_n_train = 2000,
@@ -80,10 +84,10 @@ def main(args):
         box_positive_fraction = 0.25,
         bbox_reg_weights = (10, 10, 5, 5, 10)
     )
-
+    
     kwargs = Kwargs(
-        _skip_flip = False,
-        _skip_image_transform = True,
+        _skip_flip = args.skip_flip,
+        _skip_image_transform = args.skip_image_transform,
         epochs = args.num_epochs,
     )
     datamodule.setup()
@@ -110,20 +114,21 @@ def main(args):
         raise ValueError("Invalid model type!")
     
     if args.wandb:
-        # arguments made to CometLogger are passed on to the comet_ml.Experiment class
+        project_name = f"{args.model_type}-{args.dataset}-{args.image_size}"
+        experiment_name = f"pre:{int(args.pretrained)}_preb:{int(args.pretrained_backbone)}_freezebn:{int(args.freeze_bn)}_skipflip:{int(args.skip_flip)}_skipimgtrf:{int(args.skip_image_transform)}_trainlayers:{args.trainable_backbone_layers}_lr:{args.learning_rate:.6f}"
         logger = WandbLogger(
-            project=args.project_name,
-            name=args.experiment_name,
+            project=project_name,
+            name=experiment_name,
             log_model=False,
             save_dir="."
         )
-        logger.watch(model, log='gradients', log_freq=500, log_graph=True)
+        logger.watch(model, log='gradients', log_freq=20, log_graph=True)
         
     else:
         logger = None  
     
     callbacks = [
-        ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-loss", mode="min"),
+        ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-mAP", mode="min"),
         LearningRateMonitor(logging_interval='step')
     ]
 
@@ -146,20 +151,30 @@ def main(args):
         model, 
         datamodule=datamodule,
     )
+    
+def str2bool(v):
+    return v.lower() in ("yes", "true", "t", "1")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
     parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--wandb', action='store_true', default=True)
-    parser.add_argument('--project_name', type=str, default='orcnn-implement')
-    parser.add_argument('--experiment_name', type=str, default='mvtec256_16bit', help='Leave blank to use default')
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--num_epochs', type=int, default=12)
+    parser.add_argument('--num_epochs', type=int, default=24)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    
+    parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])
+    parser.add_argument('--pretrained', type=str2bool, default=True)
+    parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
+    parser.add_argument('--freeze_bn', type=str2bool, default=False)
+    parser.add_argument('--skip_flip', type=str2bool, default=False)
+    parser.add_argument('--skip_image_transform', type=str2bool, default=False)
+    parser.add_argument('--trainable_backbone_layers', type=int, default=5, choices=[1, 2, 3, 4, 5])
+    parser.add_argument('--learning_rate', type=float, default=0.0001)
     args = parser.parse_args()
     main(args)

@@ -6,12 +6,11 @@ from torch.utils.data import DataLoader
 from .base import BaseDataset, collate_fn
 
 class MVTecDataset(BaseDataset):
-    # TODO merge fine-grained classes
-    CLASSES = ('background', 'nut', 'wood_screw', 'lag_wood_screw', 'bolt', 
-               'black_oxide_screw', 'shiny_screw', 'short_wood_screw', 'long_lag_screw', 
-               'large_nut', 'nut2', 'nut1', 'machine_screw', 
-               'short_machine_screw')
-
+    CLASSES = ('background', 'nut', 'wood_screw', 'lag_wood_screw', 'bolt',  # 0-4
+               'black_oxide_screw', 'shiny_screw', 'short_wood_screw', 'long_lag_screw',  # 5-8
+               'large_nut', 'nut2', 'nut1', 'machine_screw', # 9-12
+               'short_machine_screw') # 13
+    
     PALETTE = [(255, 255, 255), (165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
                (138, 43, 226), (255, 128, 0), (255, 0, 255), (0, 255, 255),
                (255, 193, 193), (0, 51, 153), (255, 250, 205), (0, 139, 139),
@@ -20,14 +19,45 @@ class MVTecDataset(BaseDataset):
     IMAGE_MEAN = (211.35 / 255, 166.559 / 255, 97.271 / 255)
     IMAGE_STD = (43.849 / 255, 40.172 / 255, 30.459 / 255)
 
+    MERGED_CLASSES = ('background', 'nut', 'wood_screw', 'lag_wood_screw', 'bolt',
+                      'black_oxide_screw', 'shiny_screw', 'machine_screw')
+    
+    MERGED_PALETTE = [(255, 255, 255), (165, 42, 42), (189, 183, 107), (0, 255, 0), (255, 0, 0),
+                        (138, 43, 226), (255, 128, 0), (0, 139, 139)]
+    
 
     def __init__(
         self, 
         save_dir: str = "/workspace/datasets/mvtec.pth",
         data_path: str = "/datasets/split_ss_mvtec",
         split: Literal["train", "test"]="train",
+        merged: bool = False,
     ):
         super(MVTecDataset, self).__init__(save_dir, data_path, split)
+        self.merged = merged
+        if merged:
+            self.CLASSES = self.MERGED_CLASSES
+            self.PALETTE = self.MERGED_PALETTE
+            
+        
+    def __getitem__(self, idx):
+        image, ann = super(MVTecDataset, self).__getitem__(idx)
+        if self.merged:
+            # 'nut', 'large_nut', 'nut2', 'nut1'
+            ann['labels'][(ann['labels'] == 1) | (ann['labels'] == 9) | (ann['labels'] == 10) | (ann['labels'] == 11)] = 1
+            # 'wood_screw', 'short_wood_screw' 
+            ann['labels'][(ann['labels'] == 2) | (ann['labels'] == 7)] = 2
+            # 'long_lag_screw', 'lag_wood_screw'
+            ann['labels'][(ann['labels'] == 3) | (ann['labels'] == 8)] = 3
+            #  # 'bolt'
+            # ann['labels'][ann['labels'] == 4] = 4
+            # 'short_machine_screw', 'machine_screw'
+            ann['labels'][(ann['labels'] == 12) | (ann['labels'] == 13)] = 7
+            # # 'black_oxide_screw'
+            # ann['labels'][ann['labels'] == 5] = 5
+            # # 'shiny_screw'
+            # ann['labels'][ann['labels'] == 6] = 6
+        return image, ann
     
 class MVTecDataModule(pl.LightningDataModule):
     def __init__(

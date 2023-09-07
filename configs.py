@@ -32,7 +32,7 @@ class ModelConfig:
     # R-CNN parameters
     box_score_thresh: float = 0.05
     box_nms_thresh: float = 0.5
-    box_detections_per_img: int = 200 # 200
+    box_detections_per_img: int = 200
     box_fg_iou_thresh: float = 0.5
     box_bg_iou_thresh: float = 0.5
     box_batch_size_per_image: int = 512

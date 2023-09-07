@@ -12,6 +12,7 @@ from datasets.mvtec import MVTecDataset
 from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
 from scheduler import CosineAnnealingWarmUpRestartsDecay, LinearWarmUpMultiStepDecay
 from evaluation.evaluator import eval_rbbox_map
+from evaluation.neurocle_evaluator import DetectionEvaluator
 from visualize_utils import plot_image
         
         
@@ -59,35 +60,53 @@ class ModelWrapper(LightningModule):
         self.outputs = []
         self.targets = []
         
+        self.detection_evaluator = DetectionEvaluator([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95], rotated=True, num_classes=self.train_config['num_classes'] - 1)
     
     def _parse_config(self, config):
         # Avoid in place modification
         # As wandb config does not accept boolean values, they must be manually converted
         config = dict(config.items())
         for k, v in config.items():
-            if k in ("pretrained", "pretrained_backbone", "_skip_flip", "_skip_image_transform", "freeze_bn"):
-                config[k] = bool(v)
+            if k == "trainable_backbone_layers":
+                config[k] = int(v)
+            
+            elif k == "learning_rate":
+                config[k] = float(v)
+            
+            elif k in ("pretrained", "pretrained_backbone", "_skip_flip", "_skip_image_transform", "freeze_bn"):
+                config[k] = config[k] == "True"
+                
         return config
                 
     def setup(self, stage: Optional[str] = None):
-        self.logger.experiment.config.update(self.train_config)
-        self.logger.experiment.config.update(self.model_config)
-        self.logger.experiment.config.update(self.kwargs)
+        # self.logger.experiment.config.update(self.train_config)
+        # self.logger.experiment.config.update(self.model_config)
+        # self.logger.experiment.config.update(self.kwargs)
+        pass
         
     def put_outputs(self, outputs):
         # [[cls 1, cls 2 ... cls 13], [(img2)...]]
         for output in outputs:
-            per_class_outputs = [[] for _ in range(self.train_config['num_classes'] - 1)]
+            # mmrotate evaluation
+            # per_class_outputs = [[] for _ in range(self.train_config['num_classes'] - 1)]
+            # oboxes = output["oboxes"].detach().cpu()
+            # oscores = output["oscores"].detach().cpu()
+            # olabels = output["olabels"].detach().cpu()
+            # oboxes_with_scores = torch.cat([oboxes, oscores.unsqueeze(-1)], dim=-1)
+            
+            # for obox, olabel in zip(oboxes_with_scores, olabels):
+            #     per_class_outputs[olabel-1].append(obox)
+                
+            # self.outputs.append(per_class_outputs)
+            # mine
             oboxes = output["oboxes"].detach().cpu()
             oscores = output["oscores"].detach().cpu()
             olabels = output["olabels"].detach().cpu()
-            oboxes_with_scores = torch.cat([oboxes, oscores.unsqueeze(-1)], dim=-1)
-            
-            for obox, olabel in zip(oboxes_with_scores, olabels):
-                per_class_outputs[olabel-1].append(obox)
-                
-            self.outputs.append(per_class_outputs)
-        
+            self.outputs.append({
+                "oboxes": oboxes,
+                "oscores": oscores,
+                "olabels": olabels
+            })
     def put_targets(self, targets):
         for target in targets:
             target_copy = {}
@@ -132,29 +151,43 @@ class ModelWrapper(LightningModule):
             self.log(f'valid-{k}', v.item())
             
         self.log('valid-loss', loss)
-        
+        loss_dict.update({'valid-loss': loss})
         # skip image logging for sweeps
-        if not hasattr(self, 'config') and batch_idx == 0:
+        if not hasattr(self, 'config') and batch_idx == 2:
             self.logger.experiment.log({
                 "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
                         for pil_image, image_path in (plot_image(image, output, target, self.dataset, 0.5, 0.5) for image, output, target in zip(images, outputs, targets))]
             })
             
-        self.put_outputs(outputs)
-        self.put_targets(targets)
+        # self.put_outputs(outputs)
+        # self.put_targets(targets)
+        self.detection_evaluator.accumulate(targets, outputs)
         return loss_dict
 
     def on_validation_epoch_end(self):
-        map, _ = eval_rbbox_map(
-            self.outputs,
-            self.targets, 
-            0.5,
-            True
-        )
-        self.log('valid-mAP', map)
+        # map, _ = eval_rbbox_map(
+        #     self.outputs,
+        #     self.targets, 
+        #     iou_thr=0.5,
+        #     use_07_metric=True,
+        #     logger=None,
+        #     nproc=4,
+        #     dataset=self.dataset
+        # )
+        aggregate_metrics, detailed_metrics= self.detection_evaluator.compute_metrics()
+        print(aggregate_metrics)
+        print("detailed_metrics", detailed_metrics)
+        self.log('valid-mAP', aggregate_metrics['mAP'])
+        self.log('valid-mIoU', aggregate_metrics['mIoU'])
+        self.log("valid-Precision", aggregate_metrics["Precision"])
+        self.log("valid-Recall", aggregate_metrics["Recall"])
+        self.log("valid-F1-Score", aggregate_metrics["F1-Score"])
+        self.log("valid-dtheta", aggregate_metrics["dtheta"])
+        
+        self.detection_evaluator.reset()
         self.outputs = []
         self.targets = []
-        
+        return {"valid-mAP": map}  
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)

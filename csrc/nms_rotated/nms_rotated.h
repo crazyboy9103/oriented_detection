@@ -2,38 +2,27 @@
 #pragma once
 #include <torch/types.h>
 
-namespace detectron2 {
-
-at::Tensor nms_rotated_cpu(
+namespace mmrotate {
+  at::Tensor nms_rotated_cpu(
     const at::Tensor& dets,
     const at::Tensor& scores,
     const double iou_threshold);
 
-#if defined(WITH_CUDA) || defined(WITH_HIP)
-at::Tensor nms_rotated_cuda(
-    const at::Tensor& dets,
-    const at::Tensor& scores,
-    const double iou_threshold);
-#endif
-
-// Interface for Python
-// inline is needed to prevent multiple function definitions when this header is
-// included by different cpps
-inline at::Tensor nms_rotated(
-    const at::Tensor& dets,
-    const at::Tensor& scores,
-    const double iou_threshold) {
-  assert(dets.device().is_cuda() == scores.device().is_cuda());
-  if (dets.device().is_cuda()) {
-#if defined(WITH_CUDA) || defined(WITH_HIP)
-    return nms_rotated_cuda(
-        dets.contiguous(), scores.contiguous(), iou_threshold);
-#else
-    AT_ERROR("Detectron2 is not compiled with GPU support!");
-#endif
+  at::Tensor nms_rotated_cuda(
+      const at::Tensor& dets,
+      const at::Tensor& scores,
+      const double iou_threshold, 
+      const int multi_label);
+  // Interface for Python
+  inline at::Tensor nms_rotated(
+      const at::Tensor& dets,
+      const at::Tensor& scores,
+      const double iou_threshold, 
+      const int multi_label) {
+    TORCH_INTERNAL_ASSERT(dets.device() == scores.device(), "dets and scores must be on same device (GPU | CPU)");
+    if (dets.device().is_cuda()) {
+      return nms_rotated_cuda(dets.contiguous(), scores.contiguous(), iou_threshold, multi_label);
+    }
+    return nms_rotated_cpu(dets.contiguous(), scores.contiguous(), iou_threshold);
   }
-
-  return nms_rotated_cpu(dets.contiguous(), scores.contiguous(), iou_threshold);
-}
-
-} // namespace detectron2
+} // namespace mmrotate

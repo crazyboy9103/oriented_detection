@@ -170,7 +170,8 @@ def eval_rbbox_map(det_results,
                    iou_thr=0.5,
                    use_07_metric=True,
                    logger=None,
-                   nproc=4):
+                   nproc=4, 
+                   dataset=None):
     """Evaluate mAP of a rotated dataset.
 
     Args:
@@ -188,6 +189,7 @@ def eval_rbbox_map(det_results,
             summary. See `mmcv.utils.print_log()` for details. Default: None.
         nproc (int): Processes used for computing TP and FP.
             Default: 4.
+        dataset (Dataset): Used to get class names and palette. DotaDataset|MVTecDataset
 
     Returns:
         tuple: (mAP, [dict, dict, ...])
@@ -289,14 +291,15 @@ def eval_rbbox_map(det_results,
     if not eval_results:
         return 0.0, []
     print_map_summary(
-        mean_ap, eval_results, logger=logger)
+        mean_ap, eval_results, logger=logger, dataset=dataset)
 
     return mean_ap, eval_results
 
 
 def print_map_summary(mean_ap,
                       results,
-                      logger=None):
+                      logger=None, 
+                      dataset=None):
     """Print mAP and results of each class.
 
     A table will be printed to show the gts/dets/recall/AP of each class and
@@ -336,8 +339,10 @@ def print_map_summary(mean_ap,
         mious[:, i] = cls_result['miou']
         mod_mious[:, i] = cls_result['mod_miou']
 
-    label_names = [str(i) for i in range(num_classes)]
-
+    label_names = [str(i) for i in range(1, num_classes+1)]
+    if dataset:
+        label_names = [dataset.idx_to_class(int(i)) for i in label_names]
+    
     if not isinstance(mean_ap, list):
         mean_ap = [mean_ap]
 

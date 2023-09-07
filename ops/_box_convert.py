@@ -5,36 +5,6 @@ import cv2
 import numpy as np
 import torch
 
-
-def bbox_flip(bboxes, img_shape, direction='horizontal'):
-    """Flip bboxes horizontally or vertically.
-
-    Args:
-        bboxes (Tensor): Shape (..., 5*k)
-        img_shape (tuple): Image shape.
-        direction (str): Flip direction, options are "horizontal", "vertical",
-            "diagonal". Default: "horizontal"
-
-    Returns:
-        Tensor: Flipped bboxes.
-    """
-    assert bboxes.shape[-1] % 5 == 0
-    assert direction in ['horizontal', 'vertical', 'diagonal']
-    flipped = bboxes.clone()
-    if direction == 'horizontal':
-        flipped[:, 0] = img_shape[1] - bboxes[:, 0] - 1
-    elif direction == 'vertical':
-        flipped[:, 1] = img_shape[0] - bboxes[:, 1] - 1
-    else:
-        flipped[:, 0] = img_shape[1] - bboxes[:, 0] - 1
-        flipped[:, 1] = img_shape[0] - bboxes[:, 1] - 1
-        
-    rotated_flag = (bboxes[:, 4] != np.pi / 2)
-    flipped[rotated_flag, 4] = np.pi / 2 - bboxes[rotated_flag, 4]
-    flipped[rotated_flag, 2] = bboxes[rotated_flag, 3]
-    flipped[rotated_flag, 3] = bboxes[rotated_flag, 2]
-    return flipped
-
 def poly2hbb_np(polys):
     if polys.shape[-1] == 8:
         polys = polys.reshape(4, 2)

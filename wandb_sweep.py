@@ -130,10 +130,10 @@ if __name__ == '__main__':
     parser.add_argument('--data_pth', type=str, default='./datasets/mvtec.pth')
     parser.add_argument('--sweep_name', type=str, default='first_sweep')
     parser.add_argument('--sweep_method', type=str, default='bayes', choices=['random', 'grid', 'bayes'])
-    parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--precision', type=str, default='32-true', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--gradient_clip_val', type=float, default=35)
-    parser.add_argument('--num_epochs', type=int, default=2)
+    parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--batch_size', type=int, default=8)
     args = parser.parse_args()
     

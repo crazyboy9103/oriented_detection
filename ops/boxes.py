@@ -1,19 +1,12 @@
-from typing import Tuple
+from typing import Tuple, Literal
 
 import torch
 from torch import Tensor
 from torchvision.ops import (
-    nms, 
     batched_nms,
     remove_small_boxes,
     clip_boxes_to_image,
-    box_convert,
-    box_area,
     box_iou,
-    generalized_box_iou,
-    complete_box_iou,
-    distance_box_iou,
-    masks_to_boxes
 )
 
 from ops._box_convert import (
@@ -25,11 +18,9 @@ from ops._box_convert import (
     obb2xyxy,
     hbb2obb,
 )
-from detectron2._C import (
+from mmrotate._C import (
     nms_rotated as _C_nms_rotated,
-    box_iou_rotated,
-    roi_align_rotated_forward,
-    roi_align_rotated_backward
+    box_iou_rotated as _C_box_iou_rotated,
 )
 
 # TODO 
@@ -85,8 +76,18 @@ def remove_small_rotated_boxes(oboxes: Tensor, min_size: float) -> Tensor:
     keep = torch.where(keep)[0]
     return keep
 
-# Note: this function (nms_rotated) might be moved into
-# torchvision/ops/boxes.py in the future
+def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, mode_flag: Literal[0, 1] = 0, aligned: bool = False) -> Tensor:
+    """ Rotated box IoU. mode_flag and aligned are kept for compatibility with mmrotate implementation.
+    Args:
+        boxes1, boxes2 (Tensor[N, 5]): boxes in ``(cx, cy, w, h, a)`` format
+        mode_flag (int): 0: standard IOU (Union is a+b-a&b), 1: IOU (Union is a)
+        aligned (bool): in principle, aligned=True performs better, but the difference is not significant
+    
+    Returns:
+        Tensor[N, N]: the NxN matrix containing the pairwise IoU values for every element in boxes1 and boxes2
+    """
+    return _C_box_iou_rotated(boxes1, boxes2, mode_flag, aligned)
+
 def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float):
     """
     Performs non-maximum suppression (NMS) on the rotated boxes according
@@ -94,50 +95,7 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float)
 
     Rotated NMS iteratively removes lower scoring rotated boxes which have an
     IoU greater than iou_threshold with another (higher scoring) rotated box.
-
-    Note that RotatedBox (5, 3, 4, 2, -90) covers exactly the same region as
-    RotatedBox (5, 3, 4, 2, 90) does, and their IoU will be 1. However, they
-    can be representing completely different objects in certain tasks, e.g., OCR.
-
-    As for the question of whether rotated-NMS should treat them as faraway boxes
-    even though their IOU is 1, it depends on the application and/or ground truth annotation.
-
-    As an extreme example, consider a single character v and the square box around it.
-
-    If the angle is 0 degree, the object (text) would be read as 'v';
-
-    If the angle is 90 degrees, the object (text) would become '>';
-
-    If the angle is 180 degrees, the object (text) would become '^';
-
-    If the angle is 270/-90 degrees, the object (text) would become '<'
-
-    All of these cases have IoU of 1 to each other, and rotated NMS that only
-    uses IoU as criterion would only keep one of them with the highest score -
-    which, practically, still makes sense in most cases because typically
-    only one of theses orientations is the correct one. Also, it does not matter
-    as much if the box is only used to classify the object (instead of transcribing
-    them with a sequential OCR recognition model) later.
-
-    On the other hand, when we use IoU to filter proposals that are close to the
-    ground truth during training, we should definitely take the angle into account if
-    we know the ground truth is labeled with the strictly correct orientation (as in,
-    upside-down words are annotated with -180 degrees even though they can be covered
-    with a 0/90/-90 degree box, etc.)
-
-    The way the original dataset is annotated also matters. For example, if the dataset
-    is a 4-point polygon dataset that does not enforce ordering of vertices/orientation,
-    we can estimate a minimum rotated bounding box to this polygon, but there's no way
-    we can tell the correct angle with 100% confidence (as shown above, there could be 4 different
-    rotated boxes, with angles differed by 90 degrees to each other, covering the exactly
-    same region). In that case we have to just use IoU to determine the box
-    proximity (as many detection benchmarks (even for text) do) unless there're other
-    assumptions we can make (like width is always larger than height, or the object is not
-    rotated by more than 90 degrees CCW/CW, etc.)
-
-    In summary, not considering angles in rotated NMS seems to be a good option for now,
-    but we should be aware of its implications.
-
+    
     Args:
         boxes (Tensor[N, 5]): Rotated boxes to perform NMS on. They are expected to be in
            (x_center, y_center, width, height, angle_degrees) format.
@@ -148,12 +106,11 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float)
         keep (Tensor): int64 tensor with the indices of the elements that have been kept
         by Rotated NMS, sorted in decreasing order of scores
     """
-    return _C_nms_rotated(boxes, scores, iou_threshold)
-
-
-# Note: this function (batched_nms_rotated) might be moved into
-# torchvision/ops/boxes.py in the future
-
+    if boxes.shape[0] == 0:
+        return None
+    
+    multi_label = False
+    return _C_nms_rotated(boxes, scores, iou_threshold, multi_label)
 
 @torch.jit.script_if_tracing
 def batched_nms_rotated(
@@ -209,94 +166,69 @@ def batched_nms_rotated(
     return keep
 
 # TODO 
-# import torch
-# from mmcv.ops import nms_rotated
+def multiclass_nms_rotated(multi_bboxes,
+                           multi_scores,
+                           score_thr,
+                           nms_iou_threshold,
+                           score_factors=None,):
+    """NMS for multi-class bboxes.
 
+    Args:
+        multi_bboxes (torch.Tensor): shape (n, #class*5) or (n, 5)
+        multi_scores (torch.Tensor): shape (n, #class), where the last column
+            contains scores of the background class, but this will be ignored.
+        score_thr (float): bbox threshold, bboxes with scores lower than it
+            will not be considered.
+        nms (float): Config of NMS.
+        score_factors (Tensor, optional): The factors multiplied to scores
+            before applying NMS. Default to None.
 
-# def multiclass_nms_rotated(multi_bboxes,
-#                            multi_scores,
-#                            score_thr,
-#                            nms,
-#                            max_num=-1,
-#                            score_factors=None,
-#                            return_inds=False):
-#     """NMS for multi-class bboxes.
+    Returns:
+        tuple (dets, labels, indices (optional)): tensors of shape (k, 5), \
+        (k), and (k). Dets are boxes with scores. Labels are 0-based.
+    """
+    num_classes = multi_scores.size(1) - 1
+    # exclude background category
+    if multi_bboxes.shape[1] > 5:
+        bboxes = multi_bboxes.view(multi_scores.size(0), -1, 5)
+    else:
+        bboxes = multi_bboxes[:, None].expand(multi_scores.size(0), num_classes, 5)
+    scores = multi_scores[:, :-1]
 
-#     Args:
-#         multi_bboxes (torch.Tensor): shape (n, #class*5) or (n, 5)
-#         multi_scores (torch.Tensor): shape (n, #class), where the last column
-#             contains scores of the background class, but this will be ignored.
-#         score_thr (float): bbox threshold, bboxes with scores lower than it
-#             will not be considered.
-#         nms (float): Config of NMS.
-#         max_num (int, optional): if there are more than max_num bboxes after
-#             NMS, only top max_num will be kept. Default to -1.
-#         score_factors (Tensor, optional): The factors multiplied to scores
-#             before applying NMS. Default to None.
-#         return_inds (bool, optional): Whether return the indices of kept
-#             bboxes. Default to False.
+    labels = torch.arange(num_classes, dtype=torch.long, device=scores.device)
+    labels = labels.view(1, -1).expand_as(scores)
+    bboxes = bboxes.reshape(-1, 5)
+    scores = scores.reshape(-1)
+    labels = labels.reshape(-1)
 
-#     Returns:
-#         tuple (dets, labels, indices (optional)): tensors of shape (k, 5), \
-#         (k), and (k). Dets are boxes with scores. Labels are 0-based.
-#     """
-#     num_classes = multi_scores.size(1) - 1
-#     # exclude background category
-#     if multi_bboxes.shape[1] > 5:
-#         bboxes = multi_bboxes.view(multi_scores.size(0), -1, 5)
-#     else:
-#         bboxes = multi_bboxes[:, None].expand(
-#             multi_scores.size(0), num_classes, 5)
-#     scores = multi_scores[:, :-1]
+    # remove low scoring boxes
+    valid_mask = scores > score_thr
+    if score_factors is not None:
+        # expand the shape to match original shape of score
+        score_factors = score_factors.view(-1, 1).expand(
+            multi_scores.size(0), num_classes)
+        score_factors = score_factors.reshape(-1)
+        scores = scores * score_factors
 
-#     labels = torch.arange(num_classes, dtype=torch.long, device=scores.device)
-#     labels = labels.view(1, -1).expand_as(scores)
-#     bboxes = bboxes.reshape(-1, 5)
-#     scores = scores.reshape(-1)
-#     labels = labels.reshape(-1)
+    inds = valid_mask.nonzero(as_tuple=False).squeeze(1)
+    bboxes, scores, labels = bboxes[inds], scores[inds], labels[inds]
 
-#     # remove low scoring boxes
-#     valid_mask = scores > score_thr
-#     if score_factors is not None:
-#         # expand the shape to match original shape of score
-#         score_factors = score_factors.view(-1, 1).expand(
-#             multi_scores.size(0), num_classes)
-#         score_factors = score_factors.reshape(-1)
-#         scores = scores * score_factors
+    if bboxes.numel() == 0:
+        return inds
 
-#     inds = valid_mask.nonzero(as_tuple=False).squeeze(1)
-#     bboxes, scores, labels = bboxes[inds], scores[inds], labels[inds]
-
-#     if bboxes.numel() == 0:
-#         dets = torch.cat([bboxes, scores[:, None]], -1)
-#         if return_inds:
-#             return dets, labels, inds
-#         else:
-#             return dets, labels
-
-#     # Strictly, the maximum coordinates of the rotating box (x,y,w,h,a)
-#     # should be calculated by polygon coordinates.
-#     # But the conversion from rbbox to polygon will slow down the speed.
-#     # So we use max(x,y) + max(w,h) as max coordinate
-#     # which is larger than polygon max coordinate
-#     # max(x1, y1, x2, y2,x3, y3, x4, y4)
-#     max_coordinate = bboxes[:, :2].max() + bboxes[:, 2:4].max()
-#     offsets = labels.to(bboxes) * (max_coordinate + 1)
-#     if bboxes.size(-1) == 5:
-#         bboxes_for_nms = bboxes.clone()
-#         bboxes_for_nms[:, :2] = bboxes_for_nms[:, :2] + offsets[:, None]
-#     else:
-#         bboxes_for_nms = bboxes + offsets[:, None]
-#     _, keep = nms_rotated(bboxes_for_nms, scores, nms.iou_thr)
-
-#     if max_num > 0:
-#         keep = keep[:max_num]
-
-#     bboxes = bboxes[keep]
-#     scores = scores[keep]
-#     labels = labels[keep]
-
-#     if return_inds:
-#         return torch.cat([bboxes, scores[:, None]], 1), labels, keep
-#     else:
-#         return torch.cat([bboxes, scores[:, None]], 1), labels
+    # Strictly, the maximum coordinates of the rotating box (x,y,w,h,a)
+    # should be calculated by polygon coordinates.
+    # But the conversion from rbbox to polygon will slow down the speed.
+    # So we use max(x,y) + max(w,h) as max coordinate
+    # which is larger than polygon max coordinate
+    # max(x1, y1, x2, y2,x3, y3, x4, y4)
+    max_coordinate = bboxes[:, :2].max() + bboxes[:, 2:4].max()
+    offsets = labels.to(bboxes) * (max_coordinate + 1)
+    if bboxes.size(-1) == 5:
+        bboxes_for_nms = bboxes.clone()
+        bboxes_for_nms[:, :2] = bboxes_for_nms[:, :2] + offsets[:, None]
+    else:
+        bboxes_for_nms = bboxes + offsets[:, None]
+        
+    keep = nms_rotated(bboxes_for_nms, scores, nms_iou_threshold)
+    return keep

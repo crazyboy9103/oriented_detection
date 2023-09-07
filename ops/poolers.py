@@ -14,7 +14,7 @@ from torchvision.utils import _log_api_usage_once
 from torchvision.ops import roi_align
 from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, _infer_scale
 
-from detectron2._C import roi_align_rotated_backward, roi_align_rotated_forward
+from mmrotate._C import roi_align_rotated_backward, roi_align_rotated_forward
 
 # Original implementation in detectron2.layers.roi_align_rotated
 class _ROIAlignRotated(Function):

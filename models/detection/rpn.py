@@ -183,7 +183,7 @@ class RegionProposalNetwork(nn.Module):
             else:
                 if self.proposal_dim == 6:
                     anchors_per_image = box_ops.hbb2obb(anchors_per_image)
-                    
+                # print("gt_boxes, anchors_per_image", gt_boxes.shape, gt_boxes.dtype, anchors_per_image.shape, anchors_per_image.dtype)
                 match_quality_matrix = self.box_similarity(gt_boxes, anchors_per_image)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
                 # get the targets corresponding GT for each proposal
@@ -354,7 +354,7 @@ class RegionProposalNetwork(nn.Module):
         # note that we detach the deltas because Faster R-CNN do not backprop through
         # the proposals
         proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
-        proposals = proposals.view(num_images, -1, self.proposal_dim)
+        proposals = proposals.view(num_images, -1, self.proposal_dim if self.proposal_dim == 4 else 5)
         boxes, scores = self.filter_proposals(proposals, objectness, images.image_sizes, num_anchors_per_level)
 
         losses = {}

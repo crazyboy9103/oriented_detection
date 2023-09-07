@@ -1,25 +1,17 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
 
 #include <torch/extension.h>
-#include "ROIAlignRotated/ROIAlignRotated.h"
+#include "roi_align_rotated/ROIAlignRotated.h"
 #include "box_iou_rotated/box_iou_rotated.h"
 #include "nms_rotated/nms_rotated.h"
 
-namespace detectron2 {
+namespace mmrotate {
 
-#if defined(WITH_CUDA) || defined(WITH_HIP)
 extern int get_cudart_version();
-#endif
 
 std::string get_cuda_version() {
-#if defined(WITH_CUDA) || defined(WITH_HIP)
   std::ostringstream oss;
-
-#if defined(WITH_CUDA)
   oss << "CUDA ";
-#else
-  oss << "HIP ";
-#endif
 
   // copied from
   // https://github.com/pytorch/pytorch/blob/master/aten/src/ATen/cuda/detail/CUDAHooks.cpp#L231
@@ -31,17 +23,10 @@ std::string get_cuda_version() {
   };
   printCudaStyleVersion(get_cudart_version());
   return oss.str();
-#else // neither CUDA nor HIP
-  return std::string("not available");
-#endif
 }
 
 bool has_cuda() {
-#if defined(WITH_CUDA)
   return true;
-#else
-  return false;
-#endif
 }
 
 // similar to
@@ -73,14 +58,14 @@ std::string get_compiler_version() {
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-  m.def("get_compiler_version", &get_compiler_version, "get_compiler_version");
-  m.def("get_cuda_version", &get_cuda_version, "get_cuda_version");
-  m.def("has_cuda", &has_cuda, "has_cuda");
-
   m.def("nms_rotated", &nms_rotated);
   m.def("box_iou_rotated", &box_iou_rotated);
   m.def("roi_align_rotated_forward", &ROIAlignRotated_forward);
   m.def("roi_align_rotated_backward", &ROIAlignRotated_backward);
+
+  m.def("get_compiler_version", &get_compiler_version, "get_compiler_version");
+  m.def("get_cuda_version", &get_cuda_version, "get_cuda_version");
+  m.def("has_cuda", &has_cuda, "has_cuda");
 }
 
 } // namespace detectron2

@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 # Copyright (c) Facebook, Inc. and its affiliates.
-
 import glob
 import os
-import shutil
 from os import path
-from setuptools import find_packages, setup
-from typing import List
+from setuptools import setup
 import torch
 from torch.utils.cpp_extension import CUDA_HOME, CppExtension, CUDAExtension
 
@@ -20,18 +17,8 @@ def get_extensions():
     main_source = path.join(extensions_dir, "vision.cpp")
     sources = glob.glob(path.join(extensions_dir, "**", "*.cpp"))
 
-    from torch.utils.cpp_extension import ROCM_HOME
-
-    is_rocm_pytorch = (
-        True if ((torch.version.hip is not None) and (ROCM_HOME is not None)) else False
-    )
-    if is_rocm_pytorch:
-        assert torch_ver >= [1, 8], "ROCM support requires PyTorch >= 1.8!"
-
     # common code between cuda and rocm platforms, for hipify version [1,0,0] and later.
-    source_cuda = glob.glob(path.join(extensions_dir, "**", "*.cu")) + glob.glob(
-        path.join(extensions_dir, "*.cu")
-    )
+    source_cuda = glob.glob(path.join(extensions_dir, "**", "*.cu")) + glob.glob(path.join(extensions_dir, "*.cu"))
     sources = [main_source] + sources
 
     extension = CppExtension
@@ -39,24 +26,18 @@ def get_extensions():
     extra_compile_args = {"cxx": []}
     define_macros = []
 
-    if (torch.cuda.is_available() and ((CUDA_HOME is not None) or is_rocm_pytorch)) or os.getenv(
-        "FORCE_CUDA", "0"
-    ) == "1":
+    if (torch.cuda.is_available() and CUDA_HOME is not None) or os.getenv("FORCE_CUDA", "0") == "1":
         extension = CUDAExtension
         sources += source_cuda
 
-        if not is_rocm_pytorch:
-            define_macros += [("WITH_CUDA", None)]
-            extra_compile_args["nvcc"] = [
-                "-O3",
-                "-DCUDA_HAS_FP16=1",
-                "-D__CUDA_NO_HALF_OPERATORS__",
-                "-D__CUDA_NO_HALF_CONVERSIONS__",
-                "-D__CUDA_NO_HALF2_OPERATORS__",
-            ]
-        else:
-            define_macros += [("WITH_HIP", None)]
-            extra_compile_args["nvcc"] = []
+        define_macros += [("WITH_CUDA", None)]
+        extra_compile_args["nvcc"] = [
+            "-O3",
+            "-DCUDA_HAS_FP16=1",
+            "-D__CUDA_NO_HALF_OPERATORS__",
+            "-D__CUDA_NO_HALF_CONVERSIONS__",
+            "-D__CUDA_NO_HALF2_OPERATORS__",
+        ]
 
         nvcc_flags_env = os.getenv("NVCC_FLAGS", "")
         if nvcc_flags_env != "":
@@ -72,7 +53,7 @@ def get_extensions():
 
     ext_modules = [
         extension(
-            "detectron2._C",
+            "mmrotate._C",
             sources,
             include_dirs=include_dirs,
             define_macros=define_macros,
@@ -83,16 +64,13 @@ def get_extensions():
     return ext_modules
 
 setup(
-    name="detectron2",
+    name="mmrotate",
     version="1.0.0",
-    author="FAIR",
-    url="https://github.com/facebookresearch/detectron2",
-    description="Detectron2 is FAIR's next-generation research "
-    "platform for object detection and segmentation.",
+    author="FAIR & OpenMMLab",
+    url="",
+    description="Detectron2 + mmrotate csrc extension",
     python_requires=">=3.7",
-    install_requires=[
-       
-    ],
+    install_requires=[],
     ext_modules=get_extensions(),
     cmdclass={"build_ext": torch.utils.cpp_extension.BuildExtension},
 )
