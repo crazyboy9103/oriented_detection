@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import XYXY_XYWH_BoxCoder, XYXY_XYWHA_BoxCoder, XYWHA_XYWHA_BoxCoder
+from models.detection.boxcoders import XYXY_XYWH_BoxCoder, XYXY_XYWHA_BoxCoder
 from models.detection.losses import rotated_fastrcnn_loss
 
 class RoIHeads(nn.Module):

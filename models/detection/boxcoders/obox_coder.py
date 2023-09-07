@@ -5,7 +5,6 @@ from torch import Tensor
 
 from .base import BaseBoxCoder
 
-@torch.jit._script_if_tracing
 def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor, proj_xy: bool = True) -> Tensor:
     """
     Encode a set of proposals with respect to some
@@ -55,7 +54,6 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor, proj_xy: b
     targets = torch.cat([targets_dx, targets_dy, targets_dw, targets_dh, targets_da], dim=1)
     return targets
 
-@torch.jit._script_if_tracing
 def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float, proj_xy: bool = True) -> Tensor:
     ctr_x = bboxes[:, 0]
     ctr_y = bboxes[:, 1]

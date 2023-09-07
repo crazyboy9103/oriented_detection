@@ -30,7 +30,7 @@ class DetectionEvaluator:
         self.reset()
 
     def reset(self):
-        # these contain lists of tensors for each class
+        # these contain tensors for each class
         # e.g. self.targets[1] contains a list of tensors containing all ground truth boxes for class 1
         # each index in the list corresponds to a different image
         self.targets = {class_idx: [] for class_idx in range(1, self.num_classes+1)}
@@ -86,7 +86,7 @@ class DetectionEvaluator:
             # For each class, compute metrics and average them to get the metrics for the threshold
             threshold_metrics = torch.zeros(6)
             for class_idx in range(1, self.num_classes+1):
-                metrics = self._compute_class_metrics(class_idx)
+                metrics = self._compute_class_metrics(class_idx, iou_threshold)
                 threshold_metrics += torch.tensor(metrics)
             
             threshold_metrics /= self.num_classes

@@ -6,7 +6,6 @@ from torch import Tensor
 
 from .base import BaseBoxCoder
 
-@torch.jit._script_if_tracing
 def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     """
     Encode a set of proposals with respect to some
@@ -52,7 +51,6 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh, targets_da), dim=1)
     return targets
 
-@torch.jit._script_if_tracing
 def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
     widths = bboxes[:, 2] - bboxes[:, 0]
     heights = bboxes[:, 3] - bboxes[:, 1]

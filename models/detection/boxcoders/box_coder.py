@@ -7,7 +7,6 @@ from torch import Tensor
 
 from .base import BaseBoxCoder
 
-@torch.jit._script_if_tracing
 def encode_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     """
     Encode a set of gt boxes with respect to anchor boxes
@@ -58,7 +57,6 @@ def encode_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh), dim=1)
     return targets
 
-@torch.jit._script_if_tracing
 def decode_boxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
     """
     Decode box predictions with respect to anchor boxes

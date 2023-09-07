@@ -46,7 +46,7 @@ class RoIHeads(nn.Module):
         self.batch_size_per_image = batch_size_per_image
         
         if bbox_reg_weights is None:
-            bbox_reg_weights = (1, 1, 1, 1, 1)
+            bbox_reg_weights = (10, 10, 5, 5, 10)
         
         self.obox_coder = XYWHA_XYWHA_BoxCoder(bbox_reg_weights)
         

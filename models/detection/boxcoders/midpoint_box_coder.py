@@ -6,7 +6,6 @@ from torch import Tensor
 from .base import BaseBoxCoder
 from ops import boxes as box_ops
 
-@torch.jit._script_if_tracing
 def encode_midpoint_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     """
     Encode a set of proposals with respect to some
@@ -73,10 +72,7 @@ def encode_midpoint_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) ->
     targets = torch.cat([targets_dx, targets_dy, targets_dw, targets_dh, targets_da, targets_db], dim=1)
     return targets
 
-@torch.jit._script_if_tracing
 def decode_midpoint_boxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
-    
-    
     ctr_x = (bboxes[:, 0] + bboxes[:, 2]) * 0.5
     ctr_y = (bboxes[:, 1] + bboxes[:, 3]) * 0.5
     widths = bboxes[:, 2] - bboxes[:, 0]

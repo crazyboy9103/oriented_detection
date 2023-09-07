@@ -38,8 +38,8 @@ def main(args):
 
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
-            "./datasets/mvtec.pth", 
-            "/mnt/d/datasets/split_ss_mvtec", 
+            "./datasets/mvtec_balanced.pth", 
+            "/mnt/d/datasets/split_ss_mvtec_balanced", 
             train_loader_kwargs, 
             test_loader_kwargs
         )
