@@ -231,7 +231,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
             box_head = TwoMLPHead(in_channels=out_channels * resolution ** 2, representation_size=1024)
         
         if box_predictor is None:
-            box_predictor = RotatedFastRCNNPredictor(in_channels=1024, num_classes=num_classes)
+            box_predictor = OrientedRCNNPredictor(in_channels=1024, num_classes=num_classes)
             
         if image_mean is None:
             image_mean = [0.485, 0.456, 0.406]

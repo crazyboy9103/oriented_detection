@@ -21,12 +21,15 @@ class RPNHead(nn.Module):
         in_channels (int): number of channels of the input feature
         num_anchors (int): number of anchors to be predicted
         conv_depth (int, optional): number of convolutions
+        bbox_dim (int, optional): box dimension, default 4 
     """
 
     def __init__(self, in_channels: int, num_anchors: int, conv_depth=1, bbox_dim=4) -> None:
         super().__init__()
-        convs = [Conv2dNormActivation(in_channels, in_channels, kernel_size=3, norm_layer=None) for _ in range(conv_depth)]
-        self.conv = nn.Sequential(*convs)
+        self.conv = nn.Sequential(*[
+            Conv2dNormActivation(in_channels, in_channels, kernel_size=3, norm_layer=None) 
+            for _ in range(conv_depth)
+        ])
         
         self.cls_logits = nn.Conv2d(in_channels, num_anchors, kernel_size=1, stride=1)
         self.bbox_pred = nn.Conv2d(in_channels, num_anchors * bbox_dim, kernel_size=1, stride=1)
@@ -62,7 +65,9 @@ def concat_box_prediction_layers(box_cls: List[Tensor], box_regression: List[Ten
     # all feature levels concatenated, so we keep the same representation
     # for the objectness and the box_regression
     for box_cls_per_level, box_regression_per_level in zip(box_cls, box_regression):
+        # Number of features, number of anchors * number of classes(=1), height, width
         N, AxC, H, W = box_cls_per_level.shape
+        # Number of anchors * regression box dimension (4 for rotated faster rcnn, 6 for oriented faster rcnn) 
         AxBoxdim = box_regression_per_level.shape[1]
         A = AxBoxdim // box_dim 
         C = AxC // A
@@ -125,7 +130,6 @@ class RegionProposalNetwork(nn.Module):
         post_nms_top_n: Dict[str, int],
         nms_thresh: float,
         score_thresh: float = 0.0,
-        proposal_dim: int = 4
     ) -> None:
         super().__init__()
         self.anchor_generator = anchor_generator
@@ -150,8 +154,9 @@ class RegionProposalNetwork(nn.Module):
         self.score_thresh = score_thresh
         self.min_size = 1e-3
         
-        self.proposal_dim = proposal_dim
-
+        self.regression_dim = 4 # regressed as (x1, y1, x2, y2)
+        self.proposal_dim = 4 # predicted as (x, y, w, h)
+        
     def pre_nms_top_n(self) -> int:
         if self.training:
             return self._pre_nms_top_n["training"]
@@ -165,9 +170,9 @@ class RegionProposalNetwork(nn.Module):
     def assign_targets_to_anchors(
         self, anchors: List[Tensor], targets: List[Dict[str, Tensor]]
     ) -> Tuple[List[Tensor], List[Tensor]]:
-        if self.proposal_dim == 4:
+        if self.regression_dim == 4:
             target_box_key = "bboxes"
-        elif self.proposal_dim == 6:
+        elif self.regression_dim == 6:
             target_box_key = "oboxes"
         
         labels = []
@@ -181,7 +186,7 @@ class RegionProposalNetwork(nn.Module):
                 matched_gt_boxes_per_image = torch.zeros(anchors_per_image.shape, dtype=torch.float32, device=device)
                 labels_per_image = torch.zeros((anchors_per_image.shape[0],), dtype=torch.float32, device=device)
             else:
-                if self.proposal_dim == 6:
+                if self.regression_dim == 6:
                     anchors_per_image = box_ops.hbb2obb(anchors_per_image)
                 # print("gt_boxes, anchors_per_image", gt_boxes.shape, gt_boxes.dtype, anchors_per_image.shape, anchors_per_image.dtype)
                 match_quality_matrix = self.box_similarity(gt_boxes, anchors_per_image)
@@ -253,13 +258,13 @@ class RegionProposalNetwork(nn.Module):
         final_boxes = []
         final_scores = []
         for boxes, scores, lvl, img_shape in zip(proposals, objectness_prob, levels, image_shapes):
-            if self.proposal_dim == 4:
+            if self.regression_dim == 4:
                 boxes = box_ops.clip_boxes_to_image(boxes, img_shape)
         
             # remove small boxes
-            if self.proposal_dim == 4:
+            if self.regression_dim == 4:
                 keep = box_ops.remove_small_boxes(boxes, self.min_size)
-            elif self.proposal_dim == 6:
+            elif self.regression_dim == 6:
                 keep = box_ops.remove_small_rotated_boxes(boxes, self.min_size)
             
             boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
@@ -270,9 +275,9 @@ class RegionProposalNetwork(nn.Module):
             boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
 
             # non-maximum suppression, independently done per level
-            if self.proposal_dim == 4:
+            if self.regression_dim == 4:
                 keep = box_ops.batched_nms(boxes, scores, lvl, self.nms_thresh)
-            elif self.proposal_dim == 6:
+            elif self.regression_dim == 6:
                 keep = box_ops.batched_nms_rotated(boxes, scores, lvl, self.nms_thresh)
                 
             # keep only topk scoring predictions
@@ -283,6 +288,68 @@ class RegionProposalNetwork(nn.Module):
             final_scores.append(scores)
         return final_boxes, final_scores
 
+    
+    def forward(
+        self,
+        images: ImageList,
+        features: Dict[str, Tensor],
+        targets: Optional[List[Dict[str, Tensor]]] = None,
+    ) -> Tuple[List[Tensor], Dict[str, Tensor]]:
+
+        """
+        Args:
+            images (ImageList): images for which we want to compute the predictions
+            features (Dict[str, Tensor]): features computed from the images that are
+                used for computing the predictions. Each tensor in the list
+                correspond to different feature levels
+            targets (List[Dict[str, Tensor]]): ground-truth boxes present in the image (optional).
+                If provided, each element in the dict should contain a field `boxes`,
+                with the locations of the ground-truth boxes.
+             
+        Returns:
+            boxes (List[Tensor]): the predicted boxes from the RPN, one Tensor per
+                image.
+            losses (Dict[str, Tensor]): the losses for the model during training. During
+                testing, it is an empty dict.
+        """
+        # RPN uses all feature maps that are available
+        features = list(features.values())
+        objectness, pred_bbox_deltas = self.head(features)
+        anchors = self.anchor_generator(images, features)
+
+        num_images = len(anchors)
+        num_anchors_per_level_shape_tensors = [o[0].shape for o in objectness]
+        num_anchors_per_level = [s[0] * s[1] * s[2] for s in num_anchors_per_level_shape_tensors]
+        objectness, pred_bbox_deltas = concat_box_prediction_layers(objectness, pred_bbox_deltas, self.regression_dim)
+        # apply pred_bbox_deltas to anchors to obtain the decoded proposals
+        # note that we detach the deltas because Faster R-CNN do not backprop through
+        # the proposals
+        proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
+        proposals = proposals.view(num_images, -1, self.proposal_dim)
+        boxes, scores = self.filter_proposals(proposals, objectness, images.image_sizes, num_anchors_per_level)
+
+        losses = {}
+        if targets is not None:
+            losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas)
+            
+        else:
+            if self.training:
+                raise ValueError("targets should not be None")
+            
+        return boxes, losses
+
+    def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas):
+        labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
+        regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
+        loss_objectness, loss_rpn_box_reg = self.compute_loss(
+            objectness, pred_bbox_deltas, labels, regression_targets
+        )
+        losses = {
+            "loss_objectness": loss_objectness,
+            "loss_rpn_box_reg": loss_rpn_box_reg,
+        }
+        return losses
+    
     def compute_loss(
         self, objectness: Tensor, pred_bbox_deltas: Tensor, labels: List[Tensor], regression_targets: List[Tensor]
     ) -> Tuple[Tensor, Tensor]:
@@ -318,67 +385,6 @@ class RegionProposalNetwork(nn.Module):
         
         return objectness_loss, box_loss
 
-    def forward(
-        self,
-        images: ImageList,
-        features: Dict[str, Tensor],
-        targets: Optional[List[Dict[str, Tensor]]] = None,
-    ) -> Tuple[List[Tensor], Dict[str, Tensor]]:
-
-        """
-        Args:
-            images (ImageList): images for which we want to compute the predictions
-            features (Dict[str, Tensor]): features computed from the images that are
-                used for computing the predictions. Each tensor in the list
-                correspond to different feature levels
-            targets (List[Dict[str, Tensor]]): ground-truth boxes present in the image (optional).
-                If provided, each element in the dict should contain a field `boxes`,
-                with the locations of the ground-truth boxes.
-             
-        Returns:
-            boxes (List[Tensor]): the predicted boxes from the RPN, one Tensor per
-                image.
-            losses (Dict[str, Tensor]): the losses for the model during training. During
-                testing, it is an empty dict.
-        """
-        # RPN uses all feature maps that are available
-        features = list(features.values())
-        objectness, pred_bbox_deltas = self.head(features)
-        anchors = self.anchor_generator(images, features)
-
-        num_images = len(anchors)
-        num_anchors_per_level_shape_tensors = [o[0].shape for o in objectness]
-        num_anchors_per_level = [s[0] * s[1] * s[2] for s in num_anchors_per_level_shape_tensors]
-        objectness, pred_bbox_deltas = concat_box_prediction_layers(objectness, pred_bbox_deltas, self.proposal_dim)
-        # apply pred_bbox_deltas to anchors to obtain the decoded proposals
-        # note that we detach the deltas because Faster R-CNN do not backprop through
-        # the proposals
-        proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
-        proposals = proposals.view(num_images, -1, self.proposal_dim if self.proposal_dim == 4 else 5)
-        boxes, scores = self.filter_proposals(proposals, objectness, images.image_sizes, num_anchors_per_level)
-
-        losses = {}
-        if targets is not None:
-            losses = self._return_loss(anchors, targets, objectness, pred_bbox_deltas)
-            
-        else:
-            if self.training:
-                raise ValueError("targets should not be None")
-            
-        return boxes, losses
-
-    def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas):
-        labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
-        regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
-        loss_objectness, loss_rpn_box_reg = self.compute_loss(
-            objectness, pred_bbox_deltas, labels, regression_targets
-        )
-        # normalizer = self.batch_size_per_image * num_images
-        losses = {
-            "loss_objectness": loss_objectness,
-            "loss_rpn_box_reg": loss_rpn_box_reg,
-        }
-        return losses
 
 class OrientedRegionProposalNetwork(RegionProposalNetwork):
     """
@@ -426,9 +432,10 @@ class OrientedRegionProposalNetwork(RegionProposalNetwork):
         post_nms_top_n: Dict[str, int],
         nms_thresh: float,
         score_thresh: float = 0.0,
-        proposal_dim: int = 6
     ) -> None:
-        super(OrientedRegionProposalNetwork, self).__init__(anchor_generator, head, fg_iou_thresh, bg_iou_thresh, batch_size_per_image, positive_fraction, pre_nms_top_n, post_nms_top_n, nms_thresh, score_thresh, proposal_dim)
+        super(OrientedRegionProposalNetwork, self).__init__(anchor_generator, head, fg_iou_thresh, bg_iou_thresh, batch_size_per_image, positive_fraction, pre_nms_top_n, post_nms_top_n, nms_thresh, score_thresh)
         self.box_coder = XYWHAB_XYWHA_BoxCoder(weights=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0))
         # used during training
         self.box_similarity = box_ops.box_iou_rotated
+        self.regression_dim = 6 # regressed as (x, y, w, h, alpha, beta)
+        self.proposal_dim = 5 # predicted as (x, y, w, h, angle)
