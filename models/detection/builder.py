@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Dict, Any, Literal
+from typing import List, Optional, Tuple, Dict
 from collections import OrderedDict
 from functools import partial
 
@@ -25,8 +25,7 @@ from torchvision.models.resnet import (
     ResNet152_Weights
 )
 
-from .roi_heads import RoIHeads as FasterRCNNRoIHeads
-from .oriented_roi_heads import RoIHeads as OrientedRCNNRoIHeads
+from .roi_heads import RotatedFasterRCNNRoIHead, OrientedRCNNRoIHead
 from .rpn import RPNHead, RegionProposalNetwork, OrientedRegionProposalNetwork
 from .transform import GeneralizedRCNNTransform
 from ops.poolers import MultiScaleRotatedRoIAlign
@@ -147,6 +146,20 @@ class GeneralizedRCNN(nn.Module):
                 like `scores`, `labels` and `mask` (for Mask R-CNN models).
 
         """
+        if self.training:
+            if targets is None:
+                torch._assert(False, "targets should not be none when in training mode")
+            else:
+                for target in targets:
+                    oboxes = target["oboxes"]
+                    if isinstance(oboxes, torch.Tensor):
+                        torch._assert(
+                            len(oboxes.shape) == 2 and oboxes.shape[-1] == 5,
+                            f"Expected target boxes to be a tensor of shape [N, 5], got {oboxes.shape}.",
+                        )
+                    else:
+                        torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(oboxes)}.")
+                        
         original_image_sizes: List[Tuple[int, int]] = []
         for img in images:
             val = img.shape[-2:]
@@ -183,8 +196,8 @@ class GeneralizedRCNN(nn.Module):
                 return losses, detections
             
             return detections
-        
-class RotatedFasterRCNN(GeneralizedRCNN):
+
+class RotatedRCNNWrapper(GeneralizedRCNN):
     def __init__(
         self, 
         backbone: nn.Module,                
@@ -196,6 +209,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
         image_std=None,
         # RPN parameters
         rpn_anchor_generator: nn.Module = _default_anchor_generator(),
+        rpn=None,
         rpn_head=None,
         rpn_pre_nms_top_n_train=2000,
         rpn_pre_nms_top_n_test=1000,
@@ -208,7 +222,8 @@ class RotatedFasterRCNN(GeneralizedRCNN):
         rpn_positive_fraction=0.5,
         rpn_score_thresh=0.0,
         # Box parameters
-        box_roi_pool: nn.Module = MultiScaleRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
+        roi_head=None,
+        box_roi_pool: nn.Module = None,
         box_head: nn.Module = None,
         box_predictor: nn.Module = None,
         box_score_thresh=0.05,
@@ -223,8 +238,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
     ) -> None:
         out_channels = backbone.out_channels
         
-        if rpn_head is None:
-            rpn_head = FasterRCNN_RPNHead(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
+        rpn_head = rpn_head(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
         
         if box_head is None:
             resolution = box_roi_pool.output_size[0]
@@ -242,7 +256,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
         
         rpn_pre_nms_top_n = dict(training=rpn_pre_nms_top_n_train, testing=rpn_pre_nms_top_n_test)
         rpn_post_nms_top_n = dict(training=rpn_post_nms_top_n_train, testing=rpn_post_nms_top_n_test)
-        rpn = RegionProposalNetwork(
+        rpn = rpn(
             rpn_anchor_generator,
             rpn_head,
             rpn_fg_iou_thresh,
@@ -255,7 +269,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
             score_thresh=rpn_score_thresh,
         )
         
-        roi_heads = FasterRCNNRoIHeads(
+        roi_heads = roi_head(
             # Box
             box_roi_pool,
             box_head,
@@ -271,167 +285,7 @@ class RotatedFasterRCNN(GeneralizedRCNN):
             nms_thresh_rotated = 0.1
         )
                 
-        super(RotatedFasterRCNN, self).__init__(backbone, transform, rpn, roi_heads)
-
-    def forward(self, images, targets=None):
-        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
-        """
-        Args:
-            images (list[Tensor]): images to be processed
-            targets (list[Dict[str, Tensor]]): ground-truth boxes present in the image (optional)
-
-        Returns:
-            result (list[BoxList] or dict[Tensor]): the output from the model.
-                During training, it returns a dict[Tensor] which contains the losses.
-                During testing, it returns list[BoxList] contains additional fields
-                like `scores`, `labels` and `mask` (for Mask R-CNN models).
-
-        """
-        if self.training:
-            if targets is None:
-                torch._assert(False, "targets should not be none when in training mode")
-            else:
-                for target in targets:
-                    boxes = target["bboxes"]
-                    if isinstance(boxes, torch.Tensor):
-                        torch._assert(
-                            len(boxes.shape) == 2 and boxes.shape[-1] == 4,
-                            f"Expected target boxes to be a tensor of shape [N, 4], got {boxes.shape}.",
-                        )
-                    else:
-                        torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(boxes)}.")
-                        
-                    oboxes = target["oboxes"]
-                    if isinstance(oboxes, torch.Tensor):
-                        torch._assert(
-                            len(oboxes.shape) == 2 and oboxes.shape[-1] == 5,
-                            f"Expected target boxes to be a tensor of shape [N, 5], got {oboxes.shape}.",
-                        )
-                    else:
-                        torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(oboxes)}.")
-
-        return super(RotatedFasterRCNN, self).forward(images, targets)
-
- 
-class OrientedRCNN(GeneralizedRCNN):
-    def __init__(
-        self, 
-        backbone: nn.Module,                
-        num_classes: int = 16,
-        # transform parameters
-        min_size=800,
-        max_size=1333,
-        image_mean=None,
-        image_std=None,
-        # RPN parameters
-        rpn_anchor_generator: nn.Module = _default_anchor_generator(),
-        rpn_head=None,
-        rpn_pre_nms_top_n_train=2000,
-        rpn_pre_nms_top_n_test=1000,
-        rpn_post_nms_top_n_train=2000,
-        rpn_post_nms_top_n_test=1000,
-        rpn_nms_thresh=0.7,
-        rpn_fg_iou_thresh=0.7,
-        rpn_bg_iou_thresh=0.3,
-        rpn_batch_size_per_image=256,
-        rpn_positive_fraction=0.5,
-        rpn_score_thresh=0.0,
-        # Box parameters
-        box_roi_pool: nn.Module = MultiScaleRotatedRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
-        box_head: nn.Module = None,
-        box_predictor: nn.Module = None,
-        box_score_thresh=0.05,
-        box_nms_thresh=0.5,
-        box_detections_per_img=100,
-        box_fg_iou_thresh=0.5,
-        box_bg_iou_thresh=0.5,
-        box_batch_size_per_image=512,
-        box_positive_fraction=0.25,
-        bbox_reg_weights=None,
-        **kwargs,
-    ) -> None:
-        out_channels = backbone.out_channels
-        
-        if rpn_head is None:
-            rpn_head = OrientedRCNN_RPNHead(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
-        
-        if box_head is None:
-            resolution = box_roi_pool.output_size[0]
-            box_head = TwoMLPHead(in_channels=out_channels * resolution ** 2, representation_size=1024)
-        
-        if box_predictor is None:
-            box_predictor = OrientedRCNNPredictor(in_channels=1024, num_classes=num_classes)
-            
-        if image_mean is None:
-            image_mean = [0.485, 0.456, 0.406]
-        if image_std is None:
-            image_std = [0.229, 0.224, 0.225]
-
-        transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std, **kwargs)
-        
-        rpn_pre_nms_top_n = dict(training=rpn_pre_nms_top_n_train, testing=rpn_pre_nms_top_n_test)
-        rpn_post_nms_top_n = dict(training=rpn_post_nms_top_n_train, testing=rpn_post_nms_top_n_test)
-        rpn = OrientedRegionProposalNetwork(
-            rpn_anchor_generator,
-            rpn_head,
-            rpn_fg_iou_thresh,
-            rpn_bg_iou_thresh,
-            rpn_batch_size_per_image,
-            rpn_positive_fraction,
-            rpn_pre_nms_top_n,
-            rpn_post_nms_top_n,
-            rpn_nms_thresh,
-            score_thresh=rpn_score_thresh,
-        )
-        
-        roi_heads = OrientedRCNNRoIHeads(
-            # Box
-            box_roi_pool,
-            box_head,
-            box_predictor,
-            box_fg_iou_thresh,
-            box_bg_iou_thresh,
-            box_batch_size_per_image,
-            box_positive_fraction,
-            bbox_reg_weights,
-            box_score_thresh,
-            box_nms_thresh,
-            box_detections_per_img,
-            nms_thresh_rotated = 0.1
-        )
-                
-        super(OrientedRCNN, self).__init__(backbone, transform, rpn, roi_heads)
-
-    def forward(self, images, targets=None):
-        # type: (List[Tensor], Optional[List[Dict[str, Tensor]]]) -> Tuple[Dict[str, Tensor], List[Dict[str, Tensor]]]
-        """
-        Args:
-            images (list[Tensor]): images to be processed
-            targets (list[Dict[str, Tensor]]): ground-truth boxes present in the image (optional)
-
-        Returns:
-            result (list[BoxList] or dict[Tensor]): the output from the model.
-                During training, it returns a dict[Tensor] which contains the losses.
-                During testing, it returns list[BoxList] contains additional fields
-                like `scores`, `labels` and `mask` (for Mask R-CNN models).
-
-        """
-        if self.training:
-            if targets is None:
-                torch._assert(False, "targets should not be none when in training mode")
-            else:
-                for target in targets:
-                    oboxes = target["oboxes"]
-                    if isinstance(oboxes, torch.Tensor):
-                        torch._assert(
-                            len(oboxes.shape) == 2 and oboxes.shape[-1] == 5,
-                            f"Expected target boxes to be a tensor of shape [N, 5], got {oboxes.shape}.",
-                        )
-                    else:
-                        torch._assert(False, f"Expected target boxes to be of type Tensor, got {type(oboxes)}.")
-
-        return super(OrientedRCNN, self).forward(images, targets)
-
+        super(RotatedRCNNWrapper, self).__init__(backbone, transform, rpn, roi_heads)
 
 def model_builder(
     pretrained: bool = True,
@@ -439,7 +293,6 @@ def model_builder(
     progress: bool = True, 
     num_classes: Optional[int] = 91,
     trainable_backbone_layers: Optional[int] = None,
-    rpn_head: Optional[nn.Module] = None,
     model: Optional[nn.Module] = None,
     freeze_bn: bool = True,
     **kwargs
@@ -488,7 +341,6 @@ def model_builder(
     
     rpn_anchor_generator = _default_anchor_generator()
     
-    rpn_head = rpn_head(backbone.out_channels, rpn_anchor_generator.num_anchors_per_location()[0], conv_depth=2)
     box_head = FastRCNNConvFCHead(
         (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
     )
@@ -497,7 +349,6 @@ def model_builder(
         backbone,
         num_classes=num_classes,
         rpn_anchor_generator=rpn_anchor_generator,
-        rpn_head=rpn_head,
         box_head=box_head,
         **kwargs,
     )
@@ -519,5 +370,17 @@ def model_builder(
         
     return model
 
-faster_rcnn_builder = partial(model_builder, rpn_head=FasterRCNN_RPNHead, model=RotatedFasterRCNN)
-oriented_rcnn_builder = partial(model_builder, rpn_head=OrientedRCNN_RPNHead, model=OrientedRCNN)
+RotatedFasterRCNN = partial(RotatedRCNNWrapper, 
+                            box_roi_pool=MultiScaleRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
+                            rpn_head=FasterRCNN_RPNHead,
+                            rpn=RegionProposalNetwork, 
+                            roi_head=RotatedFasterRCNNRoIHead)
+
+OrientedRCNN = partial(RotatedRCNNWrapper, 
+                            box_roi_pool=MultiScaleRotatedRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
+                            rpn_head=OrientedRCNN_RPNHead,
+                            rpn=OrientedRegionProposalNetwork, 
+                            roi_head=OrientedRCNNRoIHead)
+
+faster_rcnn_builder = partial(model_builder, model=RotatedFasterRCNN)
+oriented_rcnn_builder = partial(model_builder, model=OrientedRCNN)

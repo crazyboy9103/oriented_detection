@@ -6,16 +6,10 @@ from torch import nn, Tensor
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import XYXY_XYWH_BoxCoder, XYXY_XYWHA_BoxCoder
-from models.detection.losses import rotated_fastrcnn_loss, oriented_rcnn_loss
+from models.detection.boxcoders import XYXY_XYWHA_BoxCoder, XYWHA_XYWHA_BoxCoder
+from models.detection.losses import oriented_rcnn_loss
 
 class RoIHeads(nn.Module):
-    __annotations__ = {
-        "hbox_coder": XYXY_XYWHA_BoxCoder,
-        "proposal_matcher": det_utils.Matcher,
-        "fg_bg_sampler": det_utils.BalancedPositiveNegativeSampler,
-    }
-
     def __init__(
         self,
         box_roi_pool,
@@ -36,9 +30,6 @@ class RoIHeads(nn.Module):
     ):
         super().__init__()
 
-        self.rotated_box_similarity = box_ops.box_iou_rotated
-        self.horizontal_box_similarity = box_ops.box_iou
-        
         # assign ground-truth boxes for each proposal
         self.proposal_matcher = det_utils.Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=False)
 
@@ -48,7 +39,7 @@ class RoIHeads(nn.Module):
         if bbox_reg_weights is None:
             bbox_reg_weights = (10, 10, 5, 5, 10)
         
-        self.hbox_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
+        self.box_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
         
         self.box_roi_pool = box_roi_pool
         self.box_head = box_head
@@ -63,8 +54,9 @@ class RoIHeads(nn.Module):
     def assign_targets_to_proposals(self, proposals: List[Tensor], gt_boxes: List[Tensor], gt_labels: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
         matched_idxs = []
         labels = []
+        if getattr(self, "box_similarity") == None:
+            raise ValueError("box_similarity has not been set")
         
-        box_similarity = self.horizontal_box_similarity
         for proposals_in_image, gt_boxes_in_image, gt_labels_in_image in zip(proposals, gt_boxes, gt_labels):
             if gt_boxes_in_image.numel() == 0:
                 # Background image
@@ -74,7 +66,7 @@ class RoIHeads(nn.Module):
                 )
                 labels_in_image = torch.zeros((proposals_in_image.shape[0],), dtype=torch.int64, device=device)
             else:
-                match_quality_matrix = box_similarity(gt_boxes_in_image, proposals_in_image)
+                match_quality_matrix = self.box_similarity(gt_boxes_in_image, proposals_in_image)
                 
                 matched_idxs_in_image = self.proposal_matcher(match_quality_matrix)
 
@@ -111,27 +103,47 @@ class RoIHeads(nn.Module):
     def check_targets(self, targets: Optional[List[Dict[str, Tensor]]]) -> None:
         if targets is None:
             raise ValueError("targets should not be None")
-        if not all(["bboxes" in t for t in targets]):
-            raise ValueError("Every element of targets should have a boxes key")
-        if not all(["oboxes" in t for t in targets]):
-            raise ValueError("Every element of targets should have a oboxes key")
-        if not all(["labels" in t for t in targets]):
-            raise ValueError("Every element of targets should have a labels key")
-
+        
+        for key in self.check_target_keys:
+            if not all([key in t for t in targets]):
+                raise ValueError(f"Each element in targets should have {key}")
+            
+        floating_point_types = (torch.float, torch.double, torch.half)
+        
+        data_types = {
+            "bboxes": floating_point_types,
+            "oboxes": floating_point_types,
+            "labels": (torch.int64,)
+        }
+        # TODO: https://github.com/pytorch/pytorch/issues/26731
+        
+        for t in targets:
+            for key in self.check_target_keys:
+                expected_data_type = data_types[key]
+                target_data_type = t[key].dtype
+                if target_data_type not in expected_data_type:
+                    raise ValueError(
+                        f"target {key} must be one of {expected_data_type}, got {target_data_type} instead"
+                    )
+ 
+            
     def select_training_samples(
         self,
         proposals: List[Tensor],
         targets : Optional[List[Dict[str, Tensor]]]
     ):
         # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
+        self.check_targets(targets)
+        
+        if getattr(self, "matched_box_key") == None:
+            raise ValueError("matched_box_key is not set")
+        
         # Avoid in-place operation
         proposals = [proposal.clone() for proposal in proposals]
-        
-        self.check_targets(targets)
 
         dtype = proposals[0].dtype
 
-        gt_boxes = [t["bboxes"].to(dtype) for t in targets]
+        gt_boxes = [t[self.matched_box_key].to(dtype) for t in targets]
         gt_labels = [t["labels"] for t in targets]
 
         if self.training:
@@ -170,7 +182,7 @@ class RoIHeads(nn.Module):
                 
             matched_gt_oboxes.append(img_gt_oboxes[matched_idxs[img_id][img_sampled_idxs]])
         
-        rotated_regression_targets = self.hbox_coder.encode(matched_gt_oboxes, proposals)
+        rotated_regression_targets = self.box_coder.encode(matched_gt_oboxes, proposals)
         return proposals, labels, rotated_regression_targets
     
     def postprocess_detections(
@@ -185,17 +197,13 @@ class RoIHeads(nn.Module):
         # horizontal based can result in misaligned horizontal and rotated boxes
         box_dim = 5
         box_clip = lambda x, y: x # TODO: clipping for rotated boxes
-        box_coder = self.hbox_coder
-        nms = box_ops.batched_nms_rotated
-        nms_thresh = self.nms_thresh_rotated
-        remove_small_fn = box_ops.remove_small_rotated_boxes
         
         device = class_logits.device
         num_classes = class_logits.shape[-1]
 
         boxes_per_image = [boxes_in_image.shape[0] for boxes_in_image in proposals]
 
-        pred_boxes = box_coder.decode(box_regression, proposals)
+        pred_boxes = self.box_coder.decode(box_regression, proposals)
         pred_scores = F.softmax(class_logits, -1)
 
         pred_boxes_list = pred_boxes.split(boxes_per_image, 0)
@@ -224,11 +232,11 @@ class RoIHeads(nn.Module):
             keep = torch.where(scores > self.score_thresh)[0]
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
             # remove empty boxes
-            keep = remove_small_fn(boxes, min_size=1e-2)
+            keep = box_ops.remove_small_rotated_boxes(boxes, min_size=1e-2)
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
              
             # non-maximum suppression, independently done per class
-            keep = nms(boxes, scores, labels, nms_thresh)
+            keep = box_ops.batched_nms_rotated(boxes, scores, labels, self.nms_thresh_rotated)
             # keep only topk scoring predictions
             keep = keep[: self.detections_per_img]
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
@@ -254,16 +262,7 @@ class RoIHeads(nn.Module):
             image_shapes (List[Tuple[H, W]])
             targets (List[Dict])
         """
-        if targets is not None:
-            for t in targets:
-                # TODO: https://github.com/pytorch/pytorch/issues/26731
-                floating_point_types = (torch.float, torch.double, torch.half)
-                if not t["oboxes"].dtype in floating_point_types:
-                    raise TypeError(f"target oboxes must of float type, instead got {t['oboxes'].dtype}")
-                if not t["bboxes"].dtype in floating_point_types:
-                    raise TypeError(f"target boxes must of float type, instead got {t['bboxes'].dtype}")
-                if not t["labels"].dtype == torch.int64:
-                    raise TypeError(f"target labels must of int64 type, instead got {t['labels'].dtype}")
+        
 
         train_proposals, train_labels, matched_idxs, sampled_idxs = self.select_training_samples(proposals, targets)
         train_proposals, train_labels, rotated_regression_targets = self.filter_training_samples(train_proposals, train_labels, matched_idxs, sampled_idxs, targets)
@@ -317,10 +316,97 @@ class RoIHeads(nn.Module):
                 valid_logits, valid_obox, train_labels, rotated_regression_targets
             )
 
-        
         losses = {
             "loss_classifier": loss_classifier, 
             "loss_obox_reg": loss_obox_reg
         }
 
         return result, losses
+    
+class OrientedRCNNRoIHead(RoIHeads):
+    def __init__(
+        self,
+        box_roi_pool,
+        box_head,
+        box_predictor,
+        # Rotated Faster R-CNN training
+        fg_iou_thresh,
+        bg_iou_thresh,
+        batch_size_per_image,
+        positive_fraction,
+        bbox_reg_weights,
+        # Faster R-CNN inference
+        score_thresh,
+        nms_thresh,
+        detections_per_img,
+        # Rotated Faster R-CNN inference
+        nms_thresh_rotated,
+    ):
+        super(OrientedRCNNRoIHead, self).__init__(
+            box_roi_pool,
+            box_head,
+            box_predictor,
+            # Rotated Faster R-CNN training
+            fg_iou_thresh,
+            bg_iou_thresh,
+            batch_size_per_image,
+            positive_fraction,
+            bbox_reg_weights,
+            # Faster R-CNN inference
+            score_thresh,
+            nms_thresh,
+            detections_per_img,
+            # Rotated Faster R-CNN inference
+            nms_thresh_rotated,
+        )
+        if bbox_reg_weights is None:
+            bbox_reg_weights = (10, 10, 5, 5, 10)
+        
+        self.matched_box_key = "oboxes"
+        self.check_target_keys = ["oboxes", "labels"]
+        self.box_coder = XYWHA_XYWHA_BoxCoder(bbox_reg_weights)
+        self.box_similarity = box_ops.box_iou_rotated
+        
+class RotatedFasterRCNNRoIHead(RoIHeads):
+    def __init__(
+        self,
+        box_roi_pool,
+        box_head,
+        box_predictor,
+        # Rotated Faster R-CNN training
+        fg_iou_thresh,
+        bg_iou_thresh,
+        batch_size_per_image,
+        positive_fraction,
+        bbox_reg_weights,
+        # Faster R-CNN inference
+        score_thresh,
+        nms_thresh,
+        detections_per_img,
+        # Rotated Faster R-CNN inference
+        nms_thresh_rotated,
+    ):
+        super(RotatedFasterRCNNRoIHead, self).__init__(
+            box_roi_pool,
+            box_head,
+            box_predictor,
+            # Rotated Faster R-CNN training
+            fg_iou_thresh,
+            bg_iou_thresh,
+            batch_size_per_image,
+            positive_fraction,
+            bbox_reg_weights,
+            # Faster R-CNN inference
+            score_thresh,
+            nms_thresh,
+            detections_per_img,
+            # Rotated Faster R-CNN inference
+            nms_thresh_rotated,
+        )
+        if bbox_reg_weights is None:
+            bbox_reg_weights = (10, 10, 5, 5, 10)
+            
+        self.matched_box_key = "bboxes"
+        self.check_target_keys = ["bboxes", "oboxes", "labels"]
+        self.box_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
+        self.box_similarity = box_ops.box_iou
