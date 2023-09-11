@@ -23,10 +23,8 @@ class RoIHeads(nn.Module):
         bbox_reg_weights,
         # Faster R-CNN inference
         score_thresh,
-        nms_thresh,
-        detections_per_img,
-        # Rotated Faster R-CNN inference
         nms_thresh_rotated,
+        detections_per_img,
     ):
         super().__init__()
 
@@ -46,10 +44,8 @@ class RoIHeads(nn.Module):
         self.box_predictor = box_predictor
 
         self.score_thresh = score_thresh
-        self.nms_thresh = nms_thresh
-        self.detections_per_img = detections_per_img
-        
         self.nms_thresh_rotated = nms_thresh_rotated
+        self.detections_per_img = detections_per_img
 
     def assign_targets_to_proposals(self, proposals: List[Tensor], gt_boxes: List[Tensor], gt_labels: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
         matched_idxs = []
@@ -337,10 +333,9 @@ class OrientedRCNNRoIHead(RoIHeads):
         bbox_reg_weights,
         # Faster R-CNN inference
         score_thresh,
-        nms_thresh,
+        nms_thresh_rotated,
         detections_per_img,
         # Rotated Faster R-CNN inference
-        nms_thresh_rotated,
     ):
         super(OrientedRCNNRoIHead, self).__init__(
             box_roi_pool,
@@ -354,10 +349,8 @@ class OrientedRCNNRoIHead(RoIHeads):
             bbox_reg_weights,
             # Faster R-CNN inference
             score_thresh,
-            nms_thresh,
-            detections_per_img,
-            # Rotated Faster R-CNN inference
             nms_thresh_rotated,
+            detections_per_img,
         )
         if bbox_reg_weights is None:
             bbox_reg_weights = (10, 10, 5, 5, 10)
@@ -381,10 +374,8 @@ class RotatedFasterRCNNRoIHead(RoIHeads):
         bbox_reg_weights,
         # Faster R-CNN inference
         score_thresh,
-        nms_thresh,
-        detections_per_img,
-        # Rotated Faster R-CNN inference
         nms_thresh_rotated,
+        detections_per_img,
     ):
         super(RotatedFasterRCNNRoIHead, self).__init__(
             box_roi_pool,
@@ -398,10 +389,8 @@ class RotatedFasterRCNNRoIHead(RoIHeads):
             bbox_reg_weights,
             # Faster R-CNN inference
             score_thresh,
-            nms_thresh,
-            detections_per_img,
-            # Rotated Faster R-CNN inference
             nms_thresh_rotated,
+            detections_per_img,
         )
         if bbox_reg_weights is None:
             bbox_reg_weights = (10, 10, 5, 5, 10)

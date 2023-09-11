@@ -12,7 +12,7 @@ from datasets.mvtec import MVTecDataset
 from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
 from scheduler import CosineAnnealingWarmUpRestartsDecay, LinearWarmUpMultiStepDecay
 from evaluation.evaluator import eval_rbbox_map
-from evaluation.neurocle_evaluator import DetectionEvaluator
+from evaluation.neurocle_evaluator import DetectionEvaluator, NeurocleDetectionEvaluator
 from visualize_utils import plot_image
         
         
@@ -57,10 +57,13 @@ class ModelWrapper(LightningModule):
         
         self.steps_per_epoch = steps_per_epoch
         
-        self.outputs = []
-        self.targets = []
+        self.detection_evaluator = DetectionEvaluator(
+            iou_threshold=0.5,# [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95], 
+            rotated=True, 
+            num_classes=self.train_config['num_classes']-1
+        )
         
-        self.detection_evaluator = DetectionEvaluator([0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95], rotated=True, num_classes=self.train_config['num_classes'] - 1)
+        self.neurocle_detection_evaluator = NeurocleDetectionEvaluator(0.5, 0.5)
     
     def _parse_config(self, config):
         # Avoid in place modification
@@ -79,40 +82,9 @@ class ModelWrapper(LightningModule):
         return config
                 
     def setup(self, stage: Optional[str] = None):
-        # self.logger.experiment.config.update(self.train_config)
-        # self.logger.experiment.config.update(self.model_config)
-        # self.logger.experiment.config.update(self.kwargs)
-        pass
-        
-    def put_outputs(self, outputs):
-        # [[cls 1, cls 2 ... cls 13], [(img2)...]]
-        for output in outputs:
-            # mmrotate evaluation
-            # per_class_outputs = [[] for _ in range(self.train_config['num_classes'] - 1)]
-            # oboxes = output["oboxes"].detach().cpu()
-            # oscores = output["oscores"].detach().cpu()
-            # olabels = output["olabels"].detach().cpu()
-            # oboxes_with_scores = torch.cat([oboxes, oscores.unsqueeze(-1)], dim=-1)
-            
-            # for obox, olabel in zip(oboxes_with_scores, olabels):
-            #     per_class_outputs[olabel-1].append(obox)
-                
-            # self.outputs.append(per_class_outputs)
-            # mine
-            oboxes = output["oboxes"].detach().cpu()
-            oscores = output["oscores"].detach().cpu()
-            olabels = output["olabels"].detach().cpu()
-            self.outputs.append({
-                "oboxes": oboxes,
-                "oscores": oscores,
-                "olabels": olabels
-            })
-    def put_targets(self, targets):
-        for target in targets:
-            target_copy = {}
-            target_copy["oboxes"] = target["oboxes"].detach().cpu()
-            target_copy["labels"] = target["labels"].detach().cpu()
-            self.targets.append(target_copy)
+        self.logger.experiment.config.update(self.train_config)
+        self.logger.experiment.config.update(self.model_config)
+        self.logger.experiment.config.update(self.kwargs)
         
     def forward(self, images, targets=None):
         return self.model(images, targets)
@@ -155,13 +127,16 @@ class ModelWrapper(LightningModule):
         # skip image logging for sweeps
         if not hasattr(self, 'config') and batch_idx == 2:
             self.logger.experiment.log({
-                "images": [wandb.Image(pil_image, caption=image_path.split('/')[-1])
-                        for pil_image, image_path in (plot_image(image, output, target, self.dataset, 0.5, 0.5) for image, output, target in zip(images, outputs, targets))]
+                "images": [
+                    wandb.Image(pil_image, caption=image_path.split('/')[-1])
+                    for pil_image, image_path in (
+                        plot_image(image, output, target, self.dataset, 0.5, 0.5) for image, output, target in zip(images, outputs, targets)
+                    )
+                ]
             })
             
-        # self.put_outputs(outputs)
-        # self.put_targets(targets)
         self.detection_evaluator.accumulate(targets, outputs)
+        self.neurocle_detection_evaluator.update_state(targets, outputs)
         return loss_dict
 
     def on_validation_epoch_end(self):
@@ -175,18 +150,18 @@ class ModelWrapper(LightningModule):
         #     dataset=self.dataset
         # )
         aggregate_metrics, detailed_metrics= self.detection_evaluator.compute_metrics()
-        print(aggregate_metrics)
         print("detailed_metrics", detailed_metrics)
-        self.log('valid-mAP', aggregate_metrics['mAP'])
-        self.log('valid-mIoU', aggregate_metrics['mIoU'])
-        self.log("valid-Precision", aggregate_metrics["Precision"])
-        self.log("valid-Recall", aggregate_metrics["Recall"])
-        self.log("valid-F1-Score", aggregate_metrics["F1-Score"])
-        self.log("valid-dtheta", aggregate_metrics["dtheta"])
+        print("aggregate_metrics", aggregate_metrics)
+        
+        for key, value in aggregate_metrics.items():
+            self.log(f"valid-{key}", value)
         
         self.detection_evaluator.reset()
-        self.outputs = []
-        self.targets = []
+        neurocle_result = self.neurocle_detection_evaluator.result()
+        for key, value in neurocle_result.items():
+            self.log(f"valid-{key}", value)
+        print("neurocle_result", neurocle_result)
+        self.neurocle_detection_evaluator.reset_states()
         return {"valid-mAP": map}  
         
     def configure_optimizers(self):

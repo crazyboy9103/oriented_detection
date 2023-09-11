@@ -34,6 +34,8 @@ FasterRCNN_RPNHead = partial(RPNHead, bbox_dim=4)
 OrientedRCNN_RPNHead = partial(RPNHead, bbox_dim=6)
 
 def _default_anchor_generator():
+    # each feature map i has sizes[i] x sizes[i] anchors per spatial location. 
+    # We use 5 feature maps. 
     sizes = ((4, 8, 16, 32, 64,),) * 5 
     ratios = ((0.5, 1.0, 2.0),) * len(sizes)
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
@@ -227,7 +229,7 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         box_head: nn.Module = None,
         box_predictor: nn.Module = None,
         box_score_thresh=0.05,
-        box_nms_thresh=0.5,
+        nms_thresh_rotated=0.5,
         box_detections_per_img=100,
         box_fg_iou_thresh=0.5,
         box_bg_iou_thresh=0.5,
@@ -280,9 +282,8 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
             box_positive_fraction,
             bbox_reg_weights,
             box_score_thresh,
-            box_nms_thresh,
+            nms_thresh_rotated,
             box_detections_per_img,
-            nms_thresh_rotated = 0.1
         )
                 
         super(RotatedRCNNWrapper, self).__init__(backbone, transform, rpn, roi_heads)

@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import torch
 from torch import Tensor
@@ -205,8 +205,8 @@ class DetectionEvaluator:
         
         f1_scores = (2 * precisions * recalls) / (precisions + recalls + 1e-10)
         f1_max_idx = torch.argmax(f1_scores)
-        recall = recalls[f1_max_idx].item()
-        precision = precisions[f1_max_idx].item()
+        recall = recalls.max().item() # recalls[f1_max_idx].item()
+        precision = precisions.max().item() # precisions[f1_max_idx].item()
         f1_score = f1_scores[f1_max_idx].item()  
         
         # Add 0 and 1 to the start and end of the arrays to make sure the curve starts at (0, 1) and ends at (1, 0)
@@ -224,3 +224,106 @@ class DetectionEvaluator:
         modulated_ious = dt_ious / (1 + torch.log(abs_diff_angle + 1))
         mean_modulated_iou = modulated_ious.mean().item()
         return precision, recall, f1_score, AP, mean_iou, mean_modulated_iou
+
+class NeurocleDetectionEvaluator:
+    def __init__(
+        self, bbox_score_threshold: float = 0.5, gt_dt_iou_threshold: float = 0.5
+    ):
+        self._state: Dict[str, float] = {
+            "bbox_match": 0,
+            "dt_num_bbox": 0,
+            "gt_num_bbox": 0,
+        }
+        self.bbox_score_threshold: float = bbox_score_threshold
+        self.gt_dt_iou_threshold: float = gt_dt_iou_threshold
+
+    def update_state(
+        self,
+        labels: List[Dict[str, Tensor]],
+        decoded_detection: List[Dict[str, Tensor]],  
+    ):
+        bbox_match_total = 0
+        dt_num_bbox_total = 0
+        gt_num_bbox_total = 0
+        
+        dt_score = [det["oscores"] for det in decoded_detection]
+        dt_bbox = [det["oboxes"] for det in decoded_detection]
+        dt_label = [det["olabels"] for det in decoded_detection]
+        dt_over_thresh = [score > self.bbox_score_threshold for score in dt_score]
+
+        gt_bbox = [gt["oboxes"] for gt in labels]
+        gt_label = [gt["labels"] for gt in labels]
+
+        for batch_index in range(len(gt_bbox)):
+            dt_pos_indices = dt_over_thresh[batch_index]
+            dt_num_bbox = dt_pos_indices.count_nonzero()
+            gt_num_bbox = gt_bbox[batch_index].shape[0]
+
+            if dt_num_bbox != 0:
+                batch_gt_bbox = gt_bbox[batch_index]
+                batch_dt_bbox = dt_bbox[batch_index][dt_pos_indices]
+                batch_gt_label = gt_label[batch_index]
+                batch_dt_label = dt_label[batch_index][dt_pos_indices]
+
+                # num_gt x num_dt
+                found = box_ops.box_iou_rotated(batch_gt_bbox, batch_dt_bbox)
+
+                # num_gt x num_dt
+                # gt_box와 dt_box의 iou가 최대인 쌍들을 계산
+                found_list = []
+                for i in range(found.shape[0]):
+                    argmax = found[i, :].argmax()
+                    scatter_tensor = torch.zeros_like(found[i, :])
+                    scatter_tensor[argmax] = found[i, argmax]
+                    found_list.append(scatter_tensor)
+                    
+                found = torch.stack(found_list)
+
+                found_list = []
+                for i in range(found.shape[1]):
+                    argmax = found[:, i].argmax()
+                    scatter_tensor = torch.zeros_like(found[:, i])
+                    scatter_tensor[argmax] = found[argmax, i]
+                    found_list.append(scatter_tensor)
+                    
+                found = torch.stack(found_list, axis=1)
+                found = found > self.gt_dt_iou_threshold
+
+                # num_gt x num_dt
+                # label 일치 여부
+                label_match = batch_gt_label[:, None] == batch_dt_label[None, :]
+
+                # num_gt x num_dt
+                # bbox가 일치하는 dt, gt set이 label까지 일치하는가
+                gt_num_bbox_total += gt_num_bbox
+                dt_num_bbox_total += dt_num_bbox
+                bbox_match_total += (found & label_match).count_nonzero()
+
+        self._state["gt_num_bbox"] += float(gt_num_bbox_total)
+        self._state["dt_num_bbox"] += float(dt_num_bbox_total)
+        self._state["bbox_match"] += float(bbox_match_total)
+
+    def reset_states(self):
+        for key in self._state.keys():
+            self._state[key] = 0
+
+    def result(self) -> Dict[str, float]:
+        bbox_match = self._state["bbox_match"]
+        gt_num_bbox = self._state["gt_num_bbox"]
+        dt_num_bbox = self._state["dt_num_bbox"]
+
+        precision = bbox_match / (dt_num_bbox + 1e-6)
+        recall = bbox_match / (gt_num_bbox + 1e-6)
+
+        log = {
+            "metrics/accuracy": bbox_match / (max(gt_num_bbox, dt_num_bbox) + 1e-6), # ??
+            "metrics/precision": precision,
+            "metrics/recall": recall,
+            "metrics/f1_score": 2 * (recall * precision) / (recall + precision + 1e-6),
+        }
+
+        return log
+
+    @property
+    def name(self):
+        return "neurocle_detection_metric"

@@ -388,7 +388,6 @@ class GeneralizedRCNNTransform(nn.Module):
             ),
             T.GaussianBlur(3, sigma=(0.1, 2.0)),
             T.RandomGrayscale(p=0.1),
-            # T.RandomErasing(p=0.2, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=0, inplace=False),
         ]) if train else None
         
     def __repr__(self) -> str:

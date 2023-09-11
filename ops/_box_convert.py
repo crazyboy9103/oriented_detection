@@ -1,4 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+# modified from mmrotate/core/bbox/transforms.py
 import math
 
 import cv2
@@ -30,9 +31,9 @@ def hbb2obb(hbboxes):
     y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
     w = hbboxes[..., 2] - hbboxes[..., 0]
     h = hbboxes[..., 3] - hbboxes[..., 1]
-    theta = x.new_zeros(*x.shape)
+    theta = torch.full(x.shape, torch.pi / 2, dtype=x.dtype, device=x.device)
     results = torch.stack([x, y, w, h, theta], dim=1)
-    return torch.split(results, len(results), dim=0) if is_list else results 
+    return torch.split(results, len(results), dim=0) if is_list else results
 
 
 def poly2obb(polys):

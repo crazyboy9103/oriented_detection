@@ -76,7 +76,7 @@ def main(args):
         rpn_score_thresh = 0,
         
         box_score_thresh = 0.05,
-        box_nms_thresh = 0.5,
+        box_nms_thresh = 0.1,
         box_detections_per_img = 100,
         box_fg_iou_thresh = 0.5,
         box_bg_iou_thresh = 0.5,
@@ -128,7 +128,7 @@ def main(args):
         logger = None  
     
     callbacks = [
-        ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-mAP", mode="min"),
+        # ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-mAP", mode="max"),
         LearningRateMonitor(logging_interval='step')
     ]
 
@@ -173,8 +173,8 @@ if __name__ == '__main__':
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)
     parser.add_argument('--skip_flip', type=str2bool, default=False)
-    parser.add_argument('--skip_image_transform', type=str2bool, default=False)
-    parser.add_argument('--trainable_backbone_layers', type=int, default=5, choices=[1, 2, 3, 4, 5])
+    parser.add_argument('--skip_image_transform', type=str2bool, default=True)
+    parser.add_argument('--trainable_backbone_layers', type=int, default=3, choices=[1, 2, 3, 4, 5]) # 5: one batchnorm layer
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     args = parser.parse_args()
     main(args)
