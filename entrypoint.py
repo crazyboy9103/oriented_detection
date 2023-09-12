@@ -94,6 +94,7 @@ def main(args):
     steps_per_epoch = len(datamodule.train_dataset) // args.batch_size
     if args.model_type == 'rotated':
         model = RotatedFasterRCNN(
+            config={},
             train_config=train_config,
             model_config=model_config,
             kwargs=kwargs,
@@ -103,6 +104,7 @@ def main(args):
         
     elif args.model_type == 'oriented':
         model = OrientedRCNN(
+            config={},
             train_config=train_config,
             model_config=model_config,
             kwargs=kwargs,
@@ -162,13 +164,13 @@ if __name__ == '__main__':
     parser.add_argument('--wandb', action='store_true', default=True)
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--num_epochs', type=int, default=24)
-    parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota'])
+    parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     
-    parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])
+    parser.add_argument('--image_size', type=int, default=512, choices=[256, 512, 800])
     parser.add_argument('--pretrained', type=str2bool, default=True)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)

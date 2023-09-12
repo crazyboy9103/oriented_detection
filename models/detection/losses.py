@@ -23,8 +23,8 @@ def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_ta
     Computes the loss for Oriented R-CNN.
 
     Args:
-        class_logits (Tensor)
-        obox_regression (Tensor)
+        class_logits (Tensor) : N x C
+        obox_regression (Tensor) : (N x C x 5)
         labels (list[Tensor])
         obox_regression_targets (Tensor)
         

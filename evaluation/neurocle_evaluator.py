@@ -6,6 +6,8 @@ from torch import Tensor
 from ops import boxes as box_ops
 
 # TODO add support for horizontal boxes
+# Implemented based on the following:
+# https://github.com/rafaelpadilla/Object-Detection-Metrics
 class DetectionEvaluator:
     def __init__(self, iou_threshold: float | List[float] = 0.5, rotated: bool = False, num_classes: int = 13):
         """Evaluator for axis-aligned or oriented object detection task. Computes precision, recall, f1-score, mAP and mIoU.
@@ -109,10 +111,15 @@ class DetectionEvaluator:
                 "dtheta": dtheta
             }
             
+            # mAP is the weighted average of AP across all classes (0.5 * AP_50 + 0.55 * AP_55 + ... + 0.95 * AP_95) / (0.5 + 0.55 + ... + 0.95)
+            threshold_metrics[3] *= iou_threshold
             aggregate_metrics += threshold_metrics
         
         # For each threshold, compute metrics and average them to get the mean metrics across all thresholds
         aggregate_metrics /= len(self.iou_threshold)
+        
+        aggregate_metrics[3] *= len(self.iou_threshold)
+        aggregate_metrics[3] /= sum(self.iou_threshold)
         
         agg_precision = aggregate_metrics[0].item()
         agg_recall = aggregate_metrics[1].item()
@@ -144,7 +151,7 @@ class DetectionEvaluator:
         dt_ious = []
         gt_angles = []
         dt_angles = []
-        
+        dt_scores_for_sort = []
         # This will be used as TP + FN
         total_num_gt_bboxes = 0
         
@@ -165,8 +172,8 @@ class DetectionEvaluator:
             # To keep track of which ground truth boxes have been assigned
             # GT boxes can only be assigned once
             assigned_gt_boxes = set()
-            for dt_bbox in dt_bboxes:
-                max_iou = 0
+            for dt_bbox, dt_score in zip(dt_bboxes, dt_scores):
+                max_iou = -1
                 best_gt_idx = None
                 for gt_idx, gt_bbox in enumerate(gt_bboxes):                  
                     iou = self.iou_calculator(dt_bbox[None, :], gt_bbox[None, :]).item()
@@ -174,6 +181,7 @@ class DetectionEvaluator:
                         max_iou = iou
                         best_gt_idx = gt_idx
 
+                dt_scores_for_sort.append(dt_score)
                 if max_iou >= iou_threshold:
                     if best_gt_idx in assigned_gt_boxes:
                         FP.append(1)
@@ -198,15 +206,24 @@ class DetectionEvaluator:
         if not sum(TP):
             return 0, 0, 0, 0, 0, 0
         
-        TP_cumsum = torch.cumsum(torch.as_tensor(TP), dim=0)
-        FP_cumsum = torch.cumsum(torch.as_tensor(FP), dim=0)
+        sorted_indices = torch.argsort(torch.as_tensor(dt_scores_for_sort), descending=True)
+        TP = torch.as_tensor(TP)[sorted_indices]
+        FP = torch.as_tensor(FP)[sorted_indices]
+        dt_ious = torch.as_tensor(dt_ious)    
+        gt_angles = torch.as_tensor(gt_angles)
+        dt_angles = torch.as_tensor(dt_angles)
+        
+        
+        
+        TP_cumsum = torch.cumsum(TP, dim=0)
+        FP_cumsum = torch.cumsum(FP, dim=0)
         recalls = TP_cumsum / (total_num_gt_bboxes + 1e-10)
         precisions = TP_cumsum / (TP_cumsum + FP_cumsum + 1e-10)
         
         f1_scores = (2 * precisions * recalls) / (precisions + recalls + 1e-10)
         f1_max_idx = torch.argmax(f1_scores)
-        recall = recalls.max().item() # recalls[f1_max_idx].item()
-        precision = precisions.max().item() # precisions[f1_max_idx].item()
+        recall = recalls[f1_max_idx].item()
+        precision = precisions[f1_max_idx].item()
         f1_score = f1_scores[f1_max_idx].item()  
         
         # Add 0 and 1 to the start and end of the arrays to make sure the curve starts at (0, 1) and ends at (1, 0)
@@ -216,11 +233,10 @@ class DetectionEvaluator:
         
         AP = torch.trapz(precisions, recalls).item()
         
-        dt_ious = torch.as_tensor(dt_ious)    
         mean_iou = dt_ious.mean().item()
         
         # 𝑑(𝐼𝑜𝑈,𝜃_𝑔𝑡, 𝜃_𝑑𝑡)=𝐼𝑜𝑈/(1+ln(|𝜃_𝑔𝑡−𝜃_𝑑𝑡|+1))
-        abs_diff_angle = torch.abs(torch.as_tensor(gt_angles) - torch.as_tensor(dt_angles))
+        abs_diff_angle = torch.abs(gt_angles - dt_angles)
         modulated_ious = dt_ious / (1 + torch.log(abs_diff_angle + 1))
         mean_modulated_iou = modulated_ious.mean().item()
         return precision, recall, f1_score, AP, mean_iou, mean_modulated_iou
