@@ -1,4 +1,6 @@
 import argparse
+import os
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import torch
 import pytorch_lightning as pl
@@ -166,7 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--num_epochs', type=int, default=24)
+    parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     
