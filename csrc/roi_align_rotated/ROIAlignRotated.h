@@ -112,4 +112,4 @@ inline at::Tensor ROIAlignRotated_backward(
       sampling_ratio);
 }
 
-} // namespace detectron2
+} // namespace mmrotate

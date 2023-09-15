@@ -115,15 +115,13 @@ class ModelWrapper(LightningModule):
         end.record()
         torch.cuda.synchronize()
         elapsed_time = start.elapsed_time(end)
-        self.log('infer time/image (ms)', elapsed_time / len(images))
-        print(f"FPS: {len(images)/(elapsed_time / 1000):.6f}")
+        self.log('FPS', len(images)/(elapsed_time / 1000))
         loss = sum(loss.item() for loss in loss_dict.values())
-        
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
             
         self.log('valid-loss', loss)
-        loss_dict.update({'valid-loss': loss})
+        # loss_dict.update({'valid-loss': loss})
         # skip image logging for sweeps
         if not hasattr(self, 'config') and batch_idx == 2:
             self.logger.experiment.log({
@@ -137,18 +135,10 @@ class ModelWrapper(LightningModule):
             
         self.detection_evaluator.accumulate(targets, outputs)
         self.neurocle_detection_evaluator.update_state(targets, outputs)
-        return loss_dict
+        del loss_dict, outputs
+        # return loss_dict
 
     def on_validation_epoch_end(self):
-        # map, _ = eval_rbbox_map(
-        #     self.outputs,
-        #     self.targets, 
-        #     iou_thr=0.5,
-        #     use_07_metric=True,
-        #     logger=None,
-        #     nproc=4,
-        #     dataset=self.dataset
-        # )
         aggregate_metrics, detailed_metrics= self.detection_evaluator.compute_metrics()
         print("detailed_metrics", detailed_metrics)
         print("aggregate_metrics", aggregate_metrics)
@@ -157,12 +147,12 @@ class ModelWrapper(LightningModule):
             self.log(f"valid-{key}", value)
         
         self.detection_evaluator.reset()
+        
         neurocle_result = self.neurocle_detection_evaluator.result()
         for key, value in neurocle_result.items():
             self.log(f"valid-{key}", value)
         print("neurocle_result", neurocle_result)
         self.neurocle_detection_evaluator.reset_states()
-        return {"valid-mAP": map}  
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)

@@ -68,4 +68,4 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("has_cuda", &has_cuda, "has_cuda");
 }
 
-} // namespace detectron2
+} // namespace mmrotate

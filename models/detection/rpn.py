@@ -36,9 +36,9 @@ class RPNHead(nn.Module):
 
         for layer in self.modules():
             if isinstance(layer, nn.Conv2d):
-                torch.nn.init.normal_(layer.weight, std=0.01)  # type: ignore[arg-type]
+                nn.init.normal_(layer.weight, std=0.01)  # type: ignore[arg-type]
                 if layer.bias is not None:
-                    torch.nn.init.constant_(layer.bias, 0)  # type: ignore[arg-type]
+                    nn.init.constant_(layer.bias, 0)  # type: ignore[arg-type]
 
     def forward(self, features: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
         logits = []

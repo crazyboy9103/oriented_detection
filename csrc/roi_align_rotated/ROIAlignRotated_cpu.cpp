@@ -525,4 +525,4 @@ at::Tensor ROIAlignRotated_backward_cpu(
   return grad_input;
 }
 
-} // namespace detectron2
+} // namespace mmrotate

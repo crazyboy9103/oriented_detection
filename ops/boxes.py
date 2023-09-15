@@ -35,21 +35,11 @@ def clip_rotated_boxes_to_image(oboxes: Tensor, size: Tuple[int, int]) -> Tensor
     Returns:
         Tensor[N, 5]: clipped boxes
     """
-    # TODO jit
-    # if not torch.jit.is_scripting() and not torch.jit.is_tracing():
-    #     _log_api_usage_once(clip_boxes_to_image)
     dim = oboxes.dim()
     boxes_cx = oboxes[..., 0:1]
     boxes_cy = oboxes[..., 1:2]
     height, width = size
     
-    # TODO jit
-    # if torchvision._is_tracing():
-    #     boxes_x = torch.max(boxes_x, torch.tensor(0, dtype=boxes.dtype, device=boxes.device))
-    #     boxes_x = torch.min(boxes_x, torch.tensor(width, dtype=boxes.dtype, device=boxes.device))
-    #     boxes_y = torch.max(boxes_y, torch.tensor(0, dtype=boxes.dtype, device=boxes.device))
-    #     boxes_y = torch.min(boxes_y, torch.tensor(height, dtype=boxes.dtype, device=boxes.device))
-    # else:
     boxes_cx = boxes_cx.clamp(min=0, max=width)
     boxes_cy = boxes_cy.clamp(min=0, max=height)
 
@@ -88,7 +78,7 @@ def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, mode_flag: Literal[0, 1] = 0
     """
     return _C_box_iou_rotated(boxes1, boxes2, mode_flag, aligned)
 
-def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float):
+def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float, multi_label: bool = False):
     """
     Performs non-maximum suppression (NMS) on the rotated boxes according
     to their intersection-over-union (IoU).
@@ -109,7 +99,6 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float)
     if boxes.shape[0] == 0:
         return None
     
-    multi_label = False
     return _C_nms_rotated(boxes, scores, iou_threshold, multi_label)
 
 @torch.jit.script_if_tracing

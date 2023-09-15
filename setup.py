@@ -51,6 +51,7 @@ def get_extensions():
 
     include_dirs = [extensions_dir]
 
+    os.makedirs("./mmrotate", exist_ok=True)
     ext_modules = [
         extension(
             "mmrotate._C",

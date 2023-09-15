@@ -118,5 +118,5 @@ namespace mmrotate {
 
     return;
     }
-}  // namespace mmrotate
+} // namespace mmrotate
 #endif  // COMMON_CUDA_HELPER

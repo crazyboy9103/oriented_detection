@@ -446,4 +446,4 @@ at::Tensor ROIAlignRotated_backward_cuda(
   return grad_input;
 }
 
-} // namespace detectron2
+} // namespace mmrotate

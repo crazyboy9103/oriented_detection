@@ -14,7 +14,7 @@ from datasets.mvtec import MVTecDataModule, MVTecDataset
 from datasets.dota import DotaDataModule, DotaDataset
 
 def main(args):
-    torch.set_float32_matmul_precision("medium")
+    torch.set_float32_matmul_precision("high")
     
     train_loader_kwargs = dict(
         batch_size=args.batch_size, 
@@ -136,7 +136,7 @@ def main(args):
         LearningRateMonitor(logging_interval='step')
     ]
 
-    profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
+    # profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
     
     trainer = pl.Trainer(
         logger=logger, 
@@ -145,7 +145,7 @@ def main(args):
         precision=args.precision,
         benchmark=True,
         deterministic=True,
-        profiler=profiler,
+        profiler="advanced",
         # fast_dev_run=True,
         # accelerator="cpu",
         # detect_anomaly=True,
@@ -166,13 +166,13 @@ if __name__ == '__main__':
     parser.add_argument('--wandb', action='store_true', default=True)
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     
-    parser.add_argument('--image_size', type=int, default=512, choices=[256, 512, 800])
+    parser.add_argument('--image_size', type=int, default=800, choices=[256, 512, 800])
     parser.add_argument('--pretrained', type=str2bool, default=True)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)

@@ -43,9 +43,9 @@ def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_ta
     pos_inds = (labels > 0).nonzero().squeeze()
     labels_pos = labels[pos_inds]
     obox_regression_targets = torch.cat(obox_regression_targets, dim=0)
-    obox_regression = obox_regression.reshape(N, obox_regression.size(-1) // 5, 5)
+    obox_regression = obox_regression.reshape(N, obox_regression.size(-1) // 5, 5) # N x C x 5
     obox_loss = F.smooth_l1_loss(
-        obox_regression[pos_inds, labels_pos],
+        obox_regression[pos_inds, labels_pos], 
         obox_regression_targets[pos_inds],
         beta=1.0,
         reduction="sum",

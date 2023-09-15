@@ -153,13 +153,13 @@ class RoIHeads(nn.Module):
         return proposals, labels, matched_idxs, sampled_idxs
     
     def filter_training_samples(
-            self,
-            proposals,
-            labels,
-            matched_idxs,
-            sampled_idxs,
-            targets
-        ):
+        self,
+        proposals,
+        labels,
+        matched_idxs,
+        sampled_idxs,
+        targets
+    ):
         dtype = proposals[0].dtype
         device = proposals[0].device
          # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
@@ -189,7 +189,7 @@ class RoIHeads(nn.Module):
         image_shapes: List[Tuple[int, int]],
     ) -> Tuple[List[Tensor], List[Tensor], List[Tensor]] :
         
-        # TODO Use rotated clipping, removing small boxes, NMS for rotated boxes
+        # TODO Use rotated clipping
         # horizontal based can result in misaligned horizontal and rotated boxes
         box_dim = 5
         box_clip = lambda x, y: x # TODO: clipping for rotated boxes
@@ -236,7 +236,7 @@ class RoIHeads(nn.Module):
             # keep only topk scoring predictions
             keep = keep[: self.detections_per_img]
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
-            # all_labels.append(labels)
+
             all_boxes.append(boxes)
             all_scores.append(scores)
             all_labels.append(labels)
@@ -254,7 +254,7 @@ class RoIHeads(nn.Module):
         """
         Args:
             features (List[Tensor])
-            proposals (List[Tensor[N, 4]])
+            proposals (List[Tensor[N, 4]] | List[Tensor[N, 5]])
             image_shapes (List[Tuple[H, W]])
             targets (List[Dict])
         """
@@ -263,6 +263,7 @@ class RoIHeads(nn.Module):
         train_proposals, train_labels, matched_idxs, sampled_idxs = self.select_training_samples(proposals, targets)
         train_proposals, train_labels, rotated_regression_targets = self.filter_training_samples(train_proposals, train_labels, matched_idxs, sampled_idxs, targets)
         
+            
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
         if self.training:
@@ -297,7 +298,9 @@ class RoIHeads(nn.Module):
                         "oscores": oscores[i],
                     }
                 )
-    
+            
+            # loss for inference
+            # may be inaccurate
             valid_logits = []
             valid_obox = []
             for img_id, img_sampled_idxs in enumerate(sampled_idxs):

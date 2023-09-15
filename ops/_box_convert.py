@@ -24,16 +24,16 @@ def hbb2obb(hbboxes):
         obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
     """
     is_list = isinstance(hbboxes, list)
+    split_chunk = len(hbboxes)
     if is_list:
-        hbboxes = torch.stack(hbboxes, dim=0)
-    
+        hbboxes = torch.cat(hbboxes, dim=0)
     x = (hbboxes[..., 0] + hbboxes[..., 2]) * 0.5
     y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
     w = hbboxes[..., 2] - hbboxes[..., 0]
     h = hbboxes[..., 3] - hbboxes[..., 1]
     theta = torch.full(x.shape, torch.pi / 2, dtype=x.dtype, device=x.device)
     results = torch.stack([x, y, w, h, theta], dim=1)
-    return torch.split(results, len(results), dim=0) if is_list else results
+    return torch.split(results, len(results) // split_chunk, dim=0) if is_list else results
 
 
 def poly2obb(polys):
@@ -140,6 +140,7 @@ def obb2xyxy(rbboxes):
     return torch.stack((x1, y1, x2, y2), -1)
 
 
+# Not used
 def obb2poly_np(rbboxes):
     """Convert oriented bounding boxes to polygons.
 
@@ -168,7 +169,7 @@ def obb2poly_np(rbboxes):
     return polys
 
 
-
+# Not used
 def cal_line_length(point1, point2):
     """Calculate the length of line.
 
@@ -183,7 +184,7 @@ def cal_line_length(point1, point2):
         math.pow(point1[0] - point2[0], 2) +
         math.pow(point1[1] - point2[1], 2))
 
-
+# Not used
 def get_best_begin_point_single(coordinate):
     """Get the best begin point of the single polygon.
 
@@ -218,7 +219,7 @@ def get_best_begin_point_single(coordinate):
     return np.hstack(
         (np.array(combine[force_flag]).reshape(8), np.array(score)))
 
-
+# Not used
 def get_best_begin_point(coordinates):
     """Get the best begin points of polygons.
 
