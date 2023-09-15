@@ -1,4 +1,4 @@
-# Project Title
+# Oriented Object Detection on DOTA/MVTec Screws 
 
 This project is designed for object detection in aerial images and specializes in rotating and oriented bounding boxes. It's built on top of PyTorch and provides Docker support for easy deployment.
 
