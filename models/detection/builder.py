@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Literal
 from collections import OrderedDict
 from functools import partial
 
@@ -10,19 +10,19 @@ from torchvision.models.detection.faster_rcnn import TwoMLPHead, FastRCNNConvFCH
 from torchvision.models.detection.anchor_utils import AnchorGenerator
 # Backbones
 from torchvision.models.resnet import resnet18, resnet50, resnet101, resnet152
+from torchvision.models.mobilenetv3 import mobilenet_v3_large
 from torchvision.models.detection.backbone_utils import _mobilenet_extractor, _resnet_fpn_extractor, _validate_trainable_layers
 # Weights
 from torchvision.models.detection.faster_rcnn import (
-    FasterRCNN_MobileNet_V3_Large_320_FPN_Weights,
     FasterRCNN_MobileNet_V3_Large_FPN_Weights,
-    FasterRCNN_ResNet50_FPN_Weights, 
     FasterRCNN_ResNet50_FPN_V2_Weights,
 )
 from torchvision.models.resnet import (
     ResNet18_Weights, 
     ResNet50_Weights, 
-    ResNet101_Weights, 
-    ResNet152_Weights
+)
+from torchvision.models.mobilenetv3 import (
+    MobileNet_V3_Large_Weights
 )
 
 from .roi_heads import RotatedFasterRCNNRoIHead, OrientedRCNNRoIHead
@@ -36,7 +36,8 @@ OrientedRCNN_RPNHead = partial(RPNHead, bbox_dim=6)
 def _default_anchor_generator():
     # each feature map i has sizes[i] x sizes[i] anchors per spatial location. 
     # We use 5 feature maps. 
-    sizes = ((4, 8, 16, 32, 64,),) * 5 
+    # 800, 200, 100, 50, 25
+    sizes = ((8,),) * 5
     ratios = ((0.5, 1.0, 2.0),) * len(sizes)
     return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
 
@@ -65,35 +66,7 @@ def _check_for_degenerate_boxes(targets):
                 "All bounding boxes should have positive height and width."
                 f" Found invalid box {degen_bb} for target at index {target_idx}.",
             )
-
-class RotatedFastRCNNPredictor(nn.Module):
-    """
-    Standard classification + bounding box + angle regression layers 
-    for Fast R-CNN.
-
-    Args:
-        in_channels (int): number of input channels
-        num_classes (int): number of output classes (including background)
-    """
-
-    def __init__(self, in_channels, num_classes):
-        super().__init__()
-        self.cls_score = nn.Linear(in_channels, num_classes)
-        self.bbox_pred = nn.Linear(in_channels, num_classes * 4)
-        self.obbox_pred = nn.Linear(in_channels, num_classes * 5)
-
-    def forward(self, x):
-        if x.dim() == 4:
-            torch._assert(
-                list(x.shape[2:]) == [1, 1],
-                f"x has the wrong shape, expecting the last two dimensions to be [1,1] instead of {list(x.shape[2:])}",
-            )
-        x = x.flatten(start_dim=1)
-        scores = self.cls_score(x)
-        bbox_deltas = self.bbox_pred(x)
-        obbox_deltas = self.obbox_pred(x)
-        return scores, bbox_deltas, obbox_deltas
-
+            
 class OrientedRCNNPredictor(nn.Module):
     """
     Standard classification + Oriented bounding box regression layers 
@@ -296,22 +269,28 @@ def model_builder(
     trainable_backbone_layers: Optional[int] = None,
     model: Optional[nn.Module] = None,
     freeze_bn: bool = True,
+    backbone_type: Literal["mobilenetv3large", "resnet50"] =  "mobilenetv3large",
     **kwargs
 ):
 
     if pretrained:
-        weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1
-        weights = FasterRCNN_ResNet50_FPN_V2_Weights.verify(weights)
+        if backbone_type == "resnet50":
+            weights = FasterRCNN_ResNet50_FPN_V2_Weights.COCO_V1
+            weights = FasterRCNN_ResNet50_FPN_V2_Weights.verify(weights)
+        elif backbone_type == "mobilenetv3large":
+            weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.COCO_V1	
+            weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.verify(weights)
         
     else:
         weights = None
-   
-    # TODO 
-    # if weights and num_classes is None:
-    #     num_classes = len(weights.meta["categories"])
-    
+
     if not weights and pretrained_backbone:
-        weights_backbone = ResNet50_Weights.IMAGENET1K_V1
+        if backbone_type == "resnet50":
+            weights_backbone = ResNet50_Weights.IMAGENET1K_V1
+            weights_backbone = ResNet50_Weights.verify(weights_backbone)
+        elif backbone_type == "mobilenetv3large":
+            weights_backbone = MobileNet_V3_Large_Weights.IMAGENET1K_V1	
+            weights_backbone = MobileNet_V3_Large_Weights.verify(weights_backbone)
     
     else:
         weights_backbone = None
@@ -335,13 +314,45 @@ def model_builder(
         fast_rcnn_norm_layer = nn.BatchNorm2d
         backbone_norm_layer = nn.BatchNorm2d
     
-    trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=5, default_value=3)
+    if backbone_type == "resnet50":
+        max_trainable_backbone_layers = 5
+    elif backbone_type == "mobilenetv3large":
+        max_trainable_backbone_layers = 6 
+        
+    trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=max_trainable_backbone_layers, default_value=3)
 
-    backbone = resnet50(weights=weights_backbone, progress=progress)
-    backbone = _resnet_fpn_extractor(backbone, trainable_backbone_layers, [1, 2, 3, 4], norm_layer=backbone_norm_layer)
+    if backbone_type == "resnet50":
+        backbone = resnet50(weights=weights_backbone, progress=progress)
+        backbone = _resnet_fpn_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
     
-    rpn_anchor_generator = _default_anchor_generator()
-    
+        rpn_anchor_generator = _default_anchor_generator()
+
+        anchor_sizes = (
+            (
+                8,
+            ),
+        ) * 5
+        aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
+        
+        rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
+        
+    elif backbone_type == "mobilenetv3large":
+        backbone = mobilenet_v3_large(weights=weights_backbone, progress=progress, norm_layer=backbone_norm_layer)	
+        backbone = _mobilenet_extractor(backbone, fpn=True, trainable_layers=trainable_backbone_layers, returned_layers=[0, 1, 2, 3, 4, 5])	
+        anchor_sizes = (	
+            (	
+                32,	
+                64,	
+                128,	
+                256,	
+                512,	
+            ),	
+        ) * 6	
+            
+        aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)	
+            
+        rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
+        
     box_head = FastRCNNConvFCHead(
         (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
     )
@@ -372,13 +383,13 @@ def model_builder(
     return model
 
 RotatedFasterRCNN = partial(RotatedRCNNWrapper, 
-                            box_roi_pool=MultiScaleRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
+                            box_roi_pool=MultiScaleRoIAlign(featmap_names=["0", "1", "2", "3", "4", "5", "6"], output_size=7, sampling_ratio=0),
                             rpn_head=FasterRCNN_RPNHead,
                             rpn=RegionProposalNetwork, 
                             roi_head=RotatedFasterRCNNRoIHead)
 
 OrientedRCNN = partial(RotatedRCNNWrapper, 
-                            box_roi_pool=MultiScaleRotatedRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=0),
+                            box_roi_pool=MultiScaleRotatedRoIAlign(featmap_names=["0", "1", "2", "3", "4", "5", "6"], output_size=7, sampling_ratio=0),
                             rpn_head=OrientedRCNN_RPNHead,
                             rpn=OrientedRegionProposalNetwork, 
                             roi_head=OrientedRCNNRoIHead)

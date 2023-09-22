@@ -301,19 +301,21 @@ class RoIHeads(nn.Module):
             
             # loss for inference
             # may be inaccurate
-            valid_logits = []
-            valid_obox = []
-            for img_id, img_sampled_idxs in enumerate(sampled_idxs):
-                mapped_idxs = (img_id + 1) * img_sampled_idxs
-                valid_logits.append(class_logits[mapped_idxs])
-                valid_obox.append(obox_regression[mapped_idxs])
+            # valid_logits = []
+            # valid_obox = []
+            # for img_id, img_sampled_idxs in enumerate(sampled_idxs):
+            #     mapped_idxs = (img_id + 1) * img_sampled_idxs
+            #     valid_logits.append(class_logits[mapped_idxs])
+            #     valid_obox.append(obox_regression[mapped_idxs])
 
-            valid_logits = torch.cat(valid_logits)
-            valid_obox = torch.cat(valid_obox)
+            # valid_logits = torch.cat(valid_logits)
+            # valid_obox = torch.cat(valid_obox)
             
-            loss_classifier, loss_obox_reg = oriented_rcnn_loss(
-                valid_logits, valid_obox, train_labels, rotated_regression_targets
-            )
+            # loss_classifier, loss_obox_reg = oriented_rcnn_loss(
+            #     valid_logits, valid_obox, train_labels, rotated_regression_targets
+            # )
+            loss_classifier = torch.tensor(0.0)
+            loss_obox_reg = torch.tensor(0.0)
 
         losses = {
             "loss_classifier": loss_classifier, 

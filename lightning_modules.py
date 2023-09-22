@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict
 from typing import Optional
+import gc
 
 import torch
 import torch.optim as optim
@@ -101,6 +102,9 @@ class ModelWrapper(LightningModule):
         for k, v in loss_dict.items():
             self.log(f'train-{k}', v.item())
         self.log('train-loss', loss.item())
+        if batch_idx % 10 == 0:
+            torch.cuda.empty_cache()
+            gc.collect()
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -123,7 +127,7 @@ class ModelWrapper(LightningModule):
         self.log('valid-loss', loss)
         # loss_dict.update({'valid-loss': loss})
         # skip image logging for sweeps
-        if not hasattr(self, 'config') and batch_idx == 2:
+        if not hasattr(self, 'config') and batch_idx == 0:
             self.logger.experiment.log({
                 "images": [
                     wandb.Image(pil_image, caption=image_path.split('/')[-1])
@@ -136,6 +140,7 @@ class ModelWrapper(LightningModule):
         self.detection_evaluator.accumulate(targets, outputs)
         self.neurocle_detection_evaluator.update_state(targets, outputs)
         del loss_dict, outputs
+        
         # return loss_dict
 
     def on_validation_epoch_end(self):
@@ -153,6 +158,9 @@ class ModelWrapper(LightningModule):
             self.log(f"valid-{key}", value)
         print("neurocle_result", neurocle_result)
         self.neurocle_detection_evaluator.reset_states()
+        
+        torch.cuda.empty_cache()
+        gc.collect()
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)

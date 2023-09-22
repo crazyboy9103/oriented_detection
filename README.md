@@ -54,7 +54,7 @@ The `csrc` folder contains custom C++/CUDA source files that need to be compiled
 pip install -e .
 ```
 
-## Import Library
+### Import Library
 
 Make sure to import PyTorch before using functions from `mmrotate`. Note that this mmrotate is pointing to the `mmrotate` directory created in the compile step.
 
@@ -125,8 +125,8 @@ python entrypoint.py \
 |-------------------------------|--------------------------------------------------------------|-------------------------|
 | `--model_type`                | Choose between rotated or oriented model type                | `rotated`, `oriented`   |
 | `--wandb`                     | Use Weights and Biases for logging                           |                         |
-| `--batch_size`                | Set the batch size for training                              | 0 < Numerical values    |
-| `--num_epochs`                | Set the number of training epochs                            | Numerical values        |
+| `--batch_size`                | Set the batch size for training                              | Numerical values > 0    |
+| `--num_epochs`                | Set the number of training epochs                            | Numerical values > 0    |
 | `--dataset`                   | Choose between mvtec or dota dataset                         | `mvtec`, `dota`         |  
 | `--image_size`                | Set the image size for training                              | `256`, `512`, `800`     |
 | `--pretrained`                | Use COCO pretrained backbone + FPN                           | `True`, `False`         |
@@ -135,7 +135,7 @@ python entrypoint.py \
 | `--skip_flip`                 | Skip random horizontal flipping                              | `True`, `False`         |
 | `--skip_image_transform`      | Skip random image transformation                             | `True`, `False`         |
 | `--trainable_backbone_layers` | Set the number of trainable backbone layers                  | `1`, `2`, `3`, `4`, `5` |
-| `--learning_rate`             | Set the learning rate for training                           | 0 < Numerical values    |
+| `--learning_rate`             | Set the learning rate for training                           | Numerical values > 0    |
 ## Licenses
 This project integrates code from the following two different projects:
 

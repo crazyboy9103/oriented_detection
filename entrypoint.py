@@ -14,19 +14,19 @@ from datasets.mvtec import MVTecDataModule, MVTecDataset
 from datasets.dota import DotaDataModule, DotaDataset
 
 def main(args):
-    torch.set_float32_matmul_precision("high")
+    torch.set_float32_matmul_precision("medium")
     
     train_loader_kwargs = dict(
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=True, 
-        pin_memory=False
+        pin_memory=True
     )
     test_loader_kwargs = dict(
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=False, 
-        pin_memory=False
+        pin_memory=True
     )
 
     if args.dataset == 'dota':
@@ -84,7 +84,9 @@ def main(args):
         box_bg_iou_thresh = 0.5,
         box_batch_size_per_image = 512, # 512
         box_positive_fraction = 0.25,
-        bbox_reg_weights = (10, 10, 5, 5, 10)
+        bbox_reg_weights = (10, 10, 5, 5, 10),
+        
+        backbone_type = 'resnet50'
     )
     
     kwargs = Kwargs(
@@ -126,13 +128,15 @@ def main(args):
             log_model=False,
             save_dir="."
         )
-        logger.watch(model, log='gradients', log_freq=20, log_graph=True)
+        # logger.watch(model, log='gradients', log_freq=20, log_graph=True)
         
     else:
         logger = None  
     
+    checkpoint_path = f"./checkpoints/{args.model_type}/{args.dataset}_{args.image_size}"
+    os.makedirs(checkpoint_path, exist_ok=True)
     callbacks = [
-        # ModelCheckpoint(dirpath="./checkpoints", save_top_k=2, monitor="valid-mAP", mode="max"),
+        ModelCheckpoint(dirpath=checkpoint_path, save_top_k=2, monitor="valid-mAP", mode="max"),
         LearningRateMonitor(logging_interval='step')
     ]
 

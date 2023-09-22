@@ -15,33 +15,33 @@ FONT = ImageFont.truetype(FONT, size=8)
 ANCHOR_TYPE = 'lt'
 
 def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: MVTecDataset|DotaDataset, h_score_threshold: float = 0.3, o_score_threshold: float = 0.3):
-    image = to_pil_image(image)
+    image = to_pil_image(image.detach().cpu())
     draw = ImageDraw.Draw(image)
 
-    if 'bboxes' in output:
-        dt_hboxes = output['bboxes']
-        dt_hlabels = output['labels']
-        dt_hscores = output['scores']
-        hmask = dt_hscores > h_score_threshold
-        dt_hboxes = dt_hboxes[hmask].cpu().tolist()
-        dt_hlabels = dt_hlabels[hmask].cpu().tolist()
-        dt_hscores = dt_hscores[hmask].cpu().tolist()
-        for dt_hbox, dt_label, dt_score in zip(dt_hboxes, dt_hlabels, dt_hscores):
-            color = data.get_palette(dt_label)
-            dt_label = data.idx_to_class(dt_label)
-            draw.rectangle(dt_hbox, outline=color, width=5)
-            text_to_draw = f'{dt_label} {dt_score:.2f}'
+    # if 'bboxes' in output:
+    #     dt_hboxes = output['bboxes']
+    #     dt_hlabels = output['labels']
+    #     dt_hscores = output['scores']
+    #     hmask = dt_hscores > h_score_threshold
+    #     dt_hboxes = dt_hboxes[hmask].cpu().tolist()
+    #     dt_hlabels = dt_hlabels[hmask].cpu().tolist()
+    #     dt_hscores = dt_hscores[hmask].cpu().tolist()
+    #     for dt_hbox, dt_label, dt_score in zip(dt_hboxes, dt_hlabels, dt_hscores):
+    #         color = data.get_palette(dt_label)
+    #         dt_label = data.idx_to_class(dt_label)
+    #         draw.rectangle(dt_hbox, outline=color, width=5)
+    #         text_to_draw = f'{dt_label} {dt_score:.2f}'
 
-            rectangle = get_xy_bounds_text(draw, dt_hbox[:2], text_to_draw)
-            draw.rectangle(rectangle, fill="black")
+    #         rectangle = get_xy_bounds_text(draw, dt_hbox[:2], text_to_draw)
+    #         draw.rectangle(rectangle, fill="black")
             
-            draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
-                      fill=color, font=FONT, anchor=ANCHOR_TYPE)
+    #         draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
+    #                   fill=color, font=FONT, anchor=ANCHOR_TYPE)
 
     if 'oboxes' in output:
-        dt_oboxes = output['oboxes']
-        dt_olabels = output['olabels']
-        dt_oscores = output['oscores']
+        dt_oboxes = output['oboxes'].detach()
+        dt_olabels = output['olabels'].detach()
+        dt_oscores = output['oscores'].detach()
         omask = dt_oscores > o_score_threshold
 
         dt_oboxes = dt_oboxes[omask].cpu()
@@ -59,9 +59,9 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
             draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
                       fill=color, font=FONT, anchor=ANCHOR_TYPE)
 
-    gt_boxes = target['bboxes'].cpu().tolist()
-    gt_opolys = target['polygons'].cpu().tolist()
-    gt_labels = target['labels'].cpu().tolist()
+    gt_boxes = target['bboxes'].detach().cpu().tolist()
+    gt_opolys = target['polygons'].detach().cpu().tolist()
+    gt_labels = target['labels'].detach().cpu().tolist()
 
     # gts
     for gt_box, gt_opoly, gt_label in zip(gt_boxes, gt_opolys, gt_labels):
