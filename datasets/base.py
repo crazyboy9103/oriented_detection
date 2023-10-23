@@ -51,9 +51,9 @@ class BaseDataset(Dataset):
         assert save_dir.split(".")[-1] in ("pth", "pt"), "save_dir must be a .pth or .pt file"
 
         if not os.path.isfile(save_dir):
-            print(save_dir, "not found, creating...")
+            print("[DATA]", save_dir, "not found, creating...")
         else:
-            print(save_dir, "found, loading...")
+            print("[DATA]", save_dir, "found, loading...")
             return torch.load(save_dir)
         
         train_anns = self.load_anns(os.path.join(data_path, "trainval/annfiles"))
@@ -73,8 +73,14 @@ class BaseDataset(Dataset):
         cls_map = {c: i for i, c in enumerate(self.CLASSES)}
         
         ann_files = glob.glob(ann_folder + '/*.txt')
+        # Use images with annotations
         img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".png") for ann_file in ann_files]
-
+        
+        # For det_demo
+        if not os.path.isfile(img_files[0]):
+            img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".jpg") for ann_file in ann_files]
+            assert img_files, "No image files found"
+            
         anns = []
         image_id = 0
         for img_file, ann_file in tqdm(zip(img_files, ann_files), desc="Loading annotations", total=len(img_files)):
@@ -105,7 +111,7 @@ class BaseDataset(Dataset):
                         
                         if not obb:
                             # Weird error in DOTA dataset, skip this instance
-                            print(obb, hbb)
+                            print("[DATA]", obb, hbb)
                             continue
                     except:
                         continue

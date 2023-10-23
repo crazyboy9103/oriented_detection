@@ -14,29 +14,9 @@ FONT = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans-Bold.ttf')
 FONT = ImageFont.truetype(FONT, size=8)
 ANCHOR_TYPE = 'lt'
 
-def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: MVTecDataset|DotaDataset, h_score_threshold: float = 0.3, o_score_threshold: float = 0.3):
+def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: MVTecDataset|DotaDataset, o_score_threshold: float = 0.3):
     image = to_pil_image(image.detach().cpu())
     draw = ImageDraw.Draw(image)
-
-    # if 'bboxes' in output:
-    #     dt_hboxes = output['bboxes']
-    #     dt_hlabels = output['labels']
-    #     dt_hscores = output['scores']
-    #     hmask = dt_hscores > h_score_threshold
-    #     dt_hboxes = dt_hboxes[hmask].cpu().tolist()
-    #     dt_hlabels = dt_hlabels[hmask].cpu().tolist()
-    #     dt_hscores = dt_hscores[hmask].cpu().tolist()
-    #     for dt_hbox, dt_label, dt_score in zip(dt_hboxes, dt_hlabels, dt_hscores):
-    #         color = data.get_palette(dt_label)
-    #         dt_label = data.idx_to_class(dt_label)
-    #         draw.rectangle(dt_hbox, outline=color, width=5)
-    #         text_to_draw = f'{dt_label} {dt_score:.2f}'
-
-    #         rectangle = get_xy_bounds_text(draw, dt_hbox[:2], text_to_draw)
-    #         draw.rectangle(rectangle, fill="black")
-            
-    #         draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
-    #                   fill=color, font=FONT, anchor=ANCHOR_TYPE)
 
     if 'oboxes' in output:
         dt_oboxes = output['oboxes'].detach()

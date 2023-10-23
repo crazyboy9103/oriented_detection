@@ -1,5 +1,6 @@
 import argparse
 import os
+import shutil
 os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import torch
@@ -10,6 +11,7 @@ from pytorch_lightning.profilers import AdvancedProfiler
 
 from configs import TrainConfig, ModelConfig, Kwargs
 from lightning_modules import RotatedFasterRCNN, OrientedRCNN
+from datasets.detdemo import DetDemoDataModule, DetDemoDataset
 from datasets.mvtec import MVTecDataModule, MVTecDataset
 from datasets.dota import DotaDataModule, DotaDataset
 
@@ -32,7 +34,7 @@ def main(args):
     if args.dataset == 'dota':
         datamodule = DotaDataModule(
             f"./datasets/dota_{args.image_size}.pth",
-            f"/mnt/d/datasets/split_ss_dota_{args.image_size}",
+            f"/datasets/split_ss_dota_{args.image_size}",
             train_loader_kwargs,
             test_loader_kwargs
         )
@@ -41,15 +43,26 @@ def main(args):
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
             "./datasets/mvtec_balanced.pth", 
-            "/mnt/d/datasets/split_ss_mvtec_balanced", 
+            "/datasets/split_ss_mvtec_balanced", 
             train_loader_kwargs, 
             test_loader_kwargs
         )
         dataset = MVTecDataset
     
+    elif args.dataset == 'detdemo':
+        datamodule = DetDemoDataModule(
+            "./datasets/detdemo.pth",
+            "/datasets/detdemo",
+            train_loader_kwargs,
+            test_loader_kwargs
+        )
+        dataset = DetDemoDataset
+
     else:
         raise ValueError("Invalid dataset!")
     
+    
+    datamodule.setup()
 
     train_config = TrainConfig(
         pretrained=args.pretrained,
@@ -86,7 +99,7 @@ def main(args):
         box_positive_fraction = 0.25,
         bbox_reg_weights = (10, 10, 5, 5, 10),
         
-        backbone_type = 'resnet50'
+        backbone_type = args.backbone_type
     )
     
     kwargs = Kwargs(
@@ -94,7 +107,6 @@ def main(args):
         _skip_image_transform = args.skip_image_transform,
         epochs = args.num_epochs,
     )
-    datamodule.setup()
     steps_per_epoch = len(datamodule.train_dataset) // args.batch_size
     if args.model_type == 'rotated':
         model = RotatedFasterRCNN(
@@ -119,8 +131,9 @@ def main(args):
     else:
         raise ValueError("Invalid model type!")
     
+    logger = None  
     if args.wandb:
-        project_name = f"{args.model_type}-{args.dataset}-{args.image_size}"
+        project_name = f"{args.model_type}-{args.backbone_type}-{args.dataset}-{args.image_size}"
         experiment_name = f"pre:{int(args.pretrained)}_preb:{int(args.pretrained_backbone)}_freezebn:{int(args.freeze_bn)}_skipflip:{int(args.skip_flip)}_skipimgtrf:{int(args.skip_image_transform)}_trainlayers:{args.trainable_backbone_layers}_lr:{args.learning_rate:.6f}"
         logger = WandbLogger(
             project=project_name,
@@ -128,20 +141,19 @@ def main(args):
             log_model=False,
             save_dir="."
         )
-        # logger.watch(model, log='gradients', log_freq=20, log_graph=True)
         
-    else:
-        logger = None  
     
-    checkpoint_path = f"./checkpoints/{args.model_type}/{args.dataset}_{args.image_size}"
+    checkpoint_path = f"./checkpoints/{args.model_type}/{args.backbone_type}/{args.dataset}_{args.image_size}"
+    if os.path.exists(checkpoint_path):
+        shutil.rmtree(checkpoint_path)
     os.makedirs(checkpoint_path, exist_ok=True)
+    
+    
     callbacks = [
         ModelCheckpoint(dirpath=checkpoint_path, save_top_k=2, monitor="valid-mAP", mode="max"),
         LearningRateMonitor(logging_interval='step')
     ]
 
-    # profiler = AdvancedProfiler(dirpath=".", filename="perf_logs")
-    
     trainer = pl.Trainer(
         logger=logger, 
         max_epochs=args.num_epochs,
@@ -150,9 +162,6 @@ def main(args):
         benchmark=True,
         deterministic=True,
         profiler="advanced",
-        # fast_dev_run=True,
-        # accelerator="cpu",
-        # detect_anomaly=True,
         callbacks=callbacks,
     )
     trainer.fit(
@@ -163,26 +172,35 @@ def main(args):
 def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
+def validate_args(args):
+    if args.model_type == "oriented" and "32" not in args.precision:
+        raise ValueError("Oriented R-CNN only supports 32-bit precision!")
+    
+    
+    
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
-    parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
+    parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated', 'oriented'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
+    parser.add_argument('--backbone_type', type=str, default="mobilenetv3large", choices=["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"])
     parser.add_argument('--wandb', action='store_true', default=True)
     # Add other necessary arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=2)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--num_epochs', type=int, default=12)
-    parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota'])
+    parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota', 'detdemo'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     
-    parser.add_argument('--image_size', type=int, default=800, choices=[256, 512, 800])
+    parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])
     parser.add_argument('--pretrained', type=str2bool, default=True)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)
     parser.add_argument('--skip_flip', type=str2bool, default=False)
     parser.add_argument('--skip_image_transform', type=str2bool, default=True)
-    parser.add_argument('--trainable_backbone_layers', type=int, default=3, choices=[1, 2, 3, 4, 5]) # 5: one batchnorm layer
+    parser.add_argument('--trainable_backbone_layers', type=int, default=4, choices=[0, 1, 2, 3, 4, 5, 6]) # 5: one batchnorm layer # max 5 for resnet50 and 6 for mobilenetv3large
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     args = parser.parse_args()
+    validate_args(args)
     main(args)

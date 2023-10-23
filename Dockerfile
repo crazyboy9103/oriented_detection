@@ -34,9 +34,3 @@ COPY . /workspace
 
 RUN pip install --upgrade pip && \ 
     pip install -r requirements.txt
-RUN pip install -e .
-
-# RUN python --version && \
-#     pip --version && \
-#     pip list && \
-#     python -c "import torch; print(torch.__version__); import pytorch_lightning as pl; from mmrotate._C import nms_rotated, box_iou_rotated; print(pl.__version__)"

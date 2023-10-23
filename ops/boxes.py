@@ -14,7 +14,6 @@ from ops._box_convert import (
     poly2obb,
     poly2obb_np,
     obb2poly,
-    obb2poly_np,
     obb2xyxy,
     hbb2obb,
 )
@@ -114,7 +113,7 @@ def batched_nms_rotated(
     Args:
         boxes (Tensor[N, 5]):
            boxes where NMS will be performed. They
-           are expected to be in (x_ctr, y_ctr, width, height, angle_degrees) format
+           are expected to be in (x_ctr, y_ctr, width, height, angle_radians) format
         scores (Tensor[N]):
            scores for each one of the boxes
         idxs (Tensor[N]):

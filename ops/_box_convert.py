@@ -1,7 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 # modified from mmrotate/core/bbox/transforms.py
-import math
-
 import cv2
 import numpy as np
 import torch
@@ -138,100 +136,6 @@ def obb2xyxy(rbboxes):
     x2 = dx + dw / 2
     y2 = dy + dh / 2
     return torch.stack((x1, y1, x2, y2), -1)
-
-
-# Not used
-def obb2poly_np(rbboxes):
-    """Convert oriented bounding boxes to polygons.
-
-    Args:
-        obbs (ndarray): [x_ctr,y_ctr,w,h,angle,score]
-
-    Returns:
-        polys (ndarray): [x0,y0,x1,y1,x2,y2,x3,y3,score]
-    """
-    x = rbboxes[:, 0]
-    y = rbboxes[:, 1]
-    w = rbboxes[:, 2]
-    h = rbboxes[:, 3]
-    a = rbboxes[:, 4]
-    score = rbboxes[:, 5]
-    cosa = np.cos(a)
-    sina = np.sin(a)
-    wx, wy = w / 2 * cosa, w / 2 * sina
-    hx, hy = -h / 2 * sina, h / 2 * cosa
-    p1x, p1y = x - wx - hx, y - wy - hy
-    p2x, p2y = x + wx - hx, y + wy - hy
-    p3x, p3y = x + wx + hx, y + wy + hy
-    p4x, p4y = x - wx + hx, y - wy + hy
-    polys = np.stack([p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y, score], axis=-1)
-    polys = get_best_begin_point(polys)
-    return polys
-
-
-# Not used
-def cal_line_length(point1, point2):
-    """Calculate the length of line.
-
-    Args:
-        point1 (List): [x,y]
-        point2 (List): [x,y]
-
-    Returns:
-        length (float)
-    """
-    return math.sqrt(
-        math.pow(point1[0] - point2[0], 2) +
-        math.pow(point1[1] - point2[1], 2))
-
-# Not used
-def get_best_begin_point_single(coordinate):
-    """Get the best begin point of the single polygon.
-
-    Args:
-        coordinate (List): [x1, y1, x2, y2, x3, y3, x4, y4, score]
-
-    Returns:
-        reorder coordinate (List): [x1, y1, x2, y2, x3, y3, x4, y4, score]
-    """
-    x1, y1, x2, y2, x3, y3, x4, y4, score = coordinate
-    xmin = min(x1, x2, x3, x4)
-    ymin = min(y1, y2, y3, y4)
-    xmax = max(x1, x2, x3, x4)
-    ymax = max(y1, y2, y3, y4)
-    combine = [[[x1, y1], [x2, y2], [x3, y3], [x4, y4]],
-               [[x2, y2], [x3, y3], [x4, y4], [x1, y1]],
-               [[x3, y3], [x4, y4], [x1, y1], [x2, y2]],
-               [[x4, y4], [x1, y1], [x2, y2], [x3, y3]]]
-    dst_coordinate = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
-    force = 100000000.0
-    force_flag = 0
-    for i in range(4):
-        temp_force = cal_line_length(combine[i][0], dst_coordinate[0]) \
-                     + cal_line_length(combine[i][1], dst_coordinate[1]) \
-                     + cal_line_length(combine[i][2], dst_coordinate[2]) \
-                     + cal_line_length(combine[i][3], dst_coordinate[3])
-        if temp_force < force:
-            force = temp_force
-            force_flag = i
-    if force_flag != 0:
-        pass
-    return np.hstack(
-        (np.array(combine[force_flag]).reshape(8), np.array(score)))
-
-# Not used
-def get_best_begin_point(coordinates):
-    """Get the best begin points of polygons.
-
-    Args:
-        coordinate (ndarray): shape(n, 9).
-
-    Returns:
-        reorder coordinate (ndarray): shape(n, 9).
-    """
-    coordinates = list(map(get_best_begin_point_single, coordinates.tolist()))
-    coordinates = np.array(coordinates)
-    return coordinates
 
 
 def dist_torch(point1, point2):

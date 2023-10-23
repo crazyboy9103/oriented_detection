@@ -23,7 +23,7 @@ class RoIHeads(nn.Module):
         bbox_reg_weights,
         # Faster R-CNN inference
         score_thresh,
-        nms_thresh_rotated,
+        box_nms_thresh,
         detections_per_img,
     ):
         super().__init__()
@@ -44,7 +44,7 @@ class RoIHeads(nn.Module):
         self.box_predictor = box_predictor
 
         self.score_thresh = score_thresh
-        self.nms_thresh_rotated = nms_thresh_rotated
+        self.box_nms_thresh = box_nms_thresh
         self.detections_per_img = detections_per_img
 
     def assign_targets_to_proposals(self, proposals: List[Tensor], gt_boxes: List[Tensor], gt_labels: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
@@ -162,7 +162,7 @@ class RoIHeads(nn.Module):
     ):
         dtype = proposals[0].dtype
         device = proposals[0].device
-         # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
+        # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
         # append ground-truth bboxes to proposals for classifier 
         # (box regressor does not obtain any gradients from them)
         matched_gt_oboxes = []
@@ -232,7 +232,7 @@ class RoIHeads(nn.Module):
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
              
             # non-maximum suppression, independently done per class
-            keep = box_ops.batched_nms_rotated(boxes, scores, labels, self.nms_thresh_rotated)
+            keep = box_ops.batched_nms_rotated(boxes, scores, labels, self.box_nms_thresh)
             # keep only topk scoring predictions
             keep = keep[: self.detections_per_img]
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
@@ -338,7 +338,7 @@ class OrientedRCNNRoIHead(RoIHeads):
         bbox_reg_weights,
         # Faster R-CNN inference
         score_thresh,
-        nms_thresh_rotated,
+        box_nms_thresh,
         detections_per_img,
         # Rotated Faster R-CNN inference
     ):
@@ -354,7 +354,7 @@ class OrientedRCNNRoIHead(RoIHeads):
             bbox_reg_weights,
             # Faster R-CNN inference
             score_thresh,
-            nms_thresh_rotated,
+            box_nms_thresh,
             detections_per_img,
         )
         if bbox_reg_weights is None:
@@ -379,7 +379,7 @@ class RotatedFasterRCNNRoIHead(RoIHeads):
         bbox_reg_weights,
         # Faster R-CNN inference
         score_thresh,
-        nms_thresh_rotated,
+        box_nms_thresh,
         detections_per_img,
     ):
         super(RotatedFasterRCNNRoIHead, self).__init__(
@@ -394,7 +394,7 @@ class RotatedFasterRCNNRoIHead(RoIHeads):
             bbox_reg_weights,
             # Faster R-CNN inference
             score_thresh,
-            nms_thresh_rotated,
+            box_nms_thresh,
             detections_per_img,
         )
         if bbox_reg_weights is None:

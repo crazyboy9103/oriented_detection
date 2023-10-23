@@ -139,8 +139,6 @@ class DetectionEvaluator:
         }
         return aggregate_metrics, detailed_metrics
         
-                
-                
     def _compute_class_metrics(self, class_idx: int, iou_threshold: float = 0.5):
         class_gt_bboxes = self.targets[class_idx]
         class_dt_bboxes = self.detections[class_idx]

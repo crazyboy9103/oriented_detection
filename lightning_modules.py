@@ -12,7 +12,6 @@ from datasets.dota import DotaDataset
 from datasets.mvtec import MVTecDataset
 from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
 from scheduler import CosineAnnealingWarmUpRestartsDecay, LinearWarmUpMultiStepDecay
-from evaluation.evaluator import eval_rbbox_map
 from evaluation.neurocle_evaluator import DetectionEvaluator, NeurocleDetectionEvaluator
 from visualize_utils import plot_image
         
@@ -59,7 +58,7 @@ class ModelWrapper(LightningModule):
         self.steps_per_epoch = steps_per_epoch
         
         self.detection_evaluator = DetectionEvaluator(
-            iou_threshold=0.5, # [0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95], 
+            iou_threshold=0.5,
             rotated=True, 
             num_classes=self.train_config['num_classes']-1
         )
@@ -132,14 +131,13 @@ class ModelWrapper(LightningModule):
                 "images": [
                     wandb.Image(pil_image, caption=image_path.split('/')[-1])
                     for pil_image, image_path in (
-                        plot_image(image, output, target, self.dataset, 0.5, 0.5) for image, output, target in zip(images, outputs, targets)
+                        plot_image(image, output, target, self.dataset, 0.5) for image, output, target in zip(images, outputs, targets)
                     )
                 ]
             })
             
         self.detection_evaluator.accumulate(targets, outputs)
         self.neurocle_detection_evaluator.update_state(targets, outputs)
-        del loss_dict, outputs
         
         # return loss_dict
 

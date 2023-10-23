@@ -39,7 +39,7 @@ class ModelConfig:
     box_positive_fraction: float = 0.25
     bbox_reg_weights: Optional[Tuple[float, float, float, float, float]] = (10, 10, 5, 5, 10)
 
-    backbone_type: Literal["resnet50", "mobilenetv3large"] = "resnet50"
+    backbone_type: Literal["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"] = "resnet50"
 @dataclass
 class Kwargs:
     _skip_flip: bool = False

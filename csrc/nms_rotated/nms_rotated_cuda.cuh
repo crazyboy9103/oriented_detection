@@ -9,11 +9,11 @@
 
 namespace mmrotate {
     __host__ __device__ inline int divideUP(const int x, const int y) {
-    return (((x) + (y)-1) / (y));
+        return (((x) + (y)-1) / (y));
     }
 
     namespace {
-    int const threadsPerBlock = sizeof(unsigned long long) * 8;
+        int const threadsPerBlock = sizeof(unsigned long long) * 8;
     }
 
     template <typename T>
@@ -40,39 +40,39 @@ namespace mmrotate {
         // (x_center, y_center, width, height, angle_degrees) here.
         __shared__ T block_boxes[threadsPerBlock * 5];
         if (threadIdx.x < col_size) {
-        block_boxes[threadIdx.x * 5 + 0] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 0];
-        block_boxes[threadIdx.x * 5 + 1] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 1];
-        block_boxes[threadIdx.x * 5 + 2] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 2];
-        block_boxes[threadIdx.x * 5 + 3] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 3];
-        block_boxes[threadIdx.x * 5 + 4] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 4];
+            block_boxes[threadIdx.x * 5 + 0] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 0];
+            block_boxes[threadIdx.x * 5 + 1] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 1];
+            block_boxes[threadIdx.x * 5 + 2] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 2];
+            block_boxes[threadIdx.x * 5 + 3] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 3];
+            block_boxes[threadIdx.x * 5 + 4] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 6 + 4];
         }
         __syncthreads();
 
         if (threadIdx.x < row_size) {
-        const int cur_box_idx = threadsPerBlock * row_start + threadIdx.x;
-        const T* cur_box = dev_boxes + cur_box_idx * 6;
-        int i = 0;
-        unsigned long long t = 0;
-        int start = 0;
-        if (row_start == col_start) {
-            start = threadIdx.x + 1;
-        }
-        for (i = start; i < col_size; i++) {
-            // Instead of devIoU used by original horizontal nms, here
-            // we use the single_box_iou_rotated function from
-            // box_iou_rotated_utils.h
-            if (single_box_iou_rotated<T>(cur_box, block_boxes + i * 5, 0) >
-                iou_threshold) {
-            t |= 1ULL << i;
+            const int cur_box_idx = threadsPerBlock * row_start + threadIdx.x;
+            const T* cur_box = dev_boxes + cur_box_idx * 6;
+            int i = 0;
+            unsigned long long t = 0;
+            int start = 0;
+            if (row_start == col_start) {
+                start = threadIdx.x + 1;
             }
-        }
-        const int col_blocks = divideUP(n_boxes, threadsPerBlock);
-        dev_mask[cur_box_idx * col_blocks + col_start] = t;
+            for (i = start; i < col_size; i++) {
+                // Instead of devIoU used by original horizontal nms, here
+                // we use the single_box_iou_rotated function from
+                // box_iou_rotated_utils.h
+                if (single_box_iou_rotated<T>(cur_box, block_boxes + i * 5, 0) >
+                    iou_threshold) {
+                t |= 1ULL << i;
+                }
+            }
+            const int col_blocks = divideUP(n_boxes, threadsPerBlock);
+            dev_mask[cur_box_idx * col_blocks + col_start] = t;
         }
     } else {
         const int row_start = blockIdx.y;
@@ -90,42 +90,41 @@ namespace mmrotate {
         // (x_center, y_center, width, height, angle_degrees) here.
         __shared__ T block_boxes[threadsPerBlock * 5];
         if (threadIdx.x < col_size) {
-        block_boxes[threadIdx.x * 5 + 0] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 0];
-        block_boxes[threadIdx.x * 5 + 1] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 1];
-        block_boxes[threadIdx.x * 5 + 2] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 2];
-        block_boxes[threadIdx.x * 5 + 3] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 3];
-        block_boxes[threadIdx.x * 5 + 4] =
-            dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 4];
+            block_boxes[threadIdx.x * 5 + 0] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 0];
+            block_boxes[threadIdx.x * 5 + 1] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 1];
+            block_boxes[threadIdx.x * 5 + 2] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 2];
+            block_boxes[threadIdx.x * 5 + 3] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 3];
+            block_boxes[threadIdx.x * 5 + 4] =
+                dev_boxes[(threadsPerBlock * col_start + threadIdx.x) * 5 + 4];
         }
         __syncthreads();
 
         if (threadIdx.x < row_size) {
-        const int cur_box_idx = threadsPerBlock * row_start + threadIdx.x;
-        const T* cur_box = dev_boxes + cur_box_idx * 5;
-        int i = 0;
-        unsigned long long t = 0;
-        int start = 0;
-        if (row_start == col_start) {
-            start = threadIdx.x + 1;
-        }
-        for (i = start; i < col_size; i++) {
-            // Instead of devIoU used by original horizontal nms, here
-            // we use the single_box_iou_rotated function from
-            // box_iou_rotated_utils.h
-            if (single_box_iou_rotated<T>(cur_box, block_boxes + i * 5, 0) >
-                iou_threshold) {
-            t |= 1ULL << i;
+            const int cur_box_idx = threadsPerBlock * row_start + threadIdx.x;
+            const T* cur_box = dev_boxes + cur_box_idx * 5;
+            int i = 0;
+            unsigned long long t = 0;
+            int start = 0;
+            if (row_start == col_start) {
+                start = threadIdx.x + 1;
             }
-        }
-        const int col_blocks = divideUP(n_boxes, threadsPerBlock);
-        dev_mask[cur_box_idx * col_blocks + col_start] = t;
+            for (i = start; i < col_size; i++) {
+                // Instead of devIoU used by original horizontal nms, here
+                // we use the single_box_iou_rotated function from
+                // box_iou_rotated_utils.h
+                if (single_box_iou_rotated<T>(cur_box, block_boxes + i * 5, 0) >
+                    iou_threshold) {
+                t |= 1ULL << i;
+                }
+            }
+            const int col_blocks = divideUP(n_boxes, threadsPerBlock);
+            dev_mask[cur_box_idx * col_blocks + col_start] = t;
         }
     }
     }
-
     #endif
 } // namespace mmrotate
