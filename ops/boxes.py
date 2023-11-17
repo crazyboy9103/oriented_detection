@@ -57,9 +57,6 @@ def remove_small_rotated_boxes(oboxes: Tensor, min_size: float) -> Tensor:
         Tensor[K]: indices of the boxes that have both sides
         larger than min_size
     """
-    # TODO jit
-    # if not torch.jit.is_scripting() and not torch.jit.is_tracing():
-    #     _log_api_usage_once(remove_small_boxes)
     ws, hs = oboxes[:, 2], oboxes[:, 3]
     keep = (ws >= min_size) & (hs >= min_size)
     keep = torch.where(keep)[0]
@@ -100,7 +97,6 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float,
     
     return _C_nms_rotated(boxes, scores, iou_threshold, multi_label)
 
-@torch.jit.script_if_tracing
 def batched_nms_rotated(
     boxes: torch.Tensor, scores: torch.Tensor, idxs: torch.Tensor, iou_threshold: float
 ):

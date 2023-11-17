@@ -8,10 +8,7 @@ from torch import Tensor
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from torch.nn.modules.utils import _pair
-from torch.jit.annotations import BroadcastingList2
 import torchvision
-from torchvision.utils import _log_api_usage_once
-from torchvision.ops import roi_align
 from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, _infer_scale
 
 from mmrotate._C import roi_align_rotated_backward, roi_align_rotated_forward
@@ -72,7 +69,7 @@ def check_roi_boxes_shape(boxes: Union[Tensor, List[Tensor]]):
 def rotated_roi_align(
     input: Tensor,
     boxes: Union[Tensor, List[Tensor]],
-    output_size: BroadcastingList2[int],
+    output_size,
     spatial_scale: float = 1.0,
     sampling_ratio: int = -1,
 ) -> Tensor:
@@ -108,9 +105,6 @@ def rotated_roi_align(
     Returns:
         Tensor[K, C, output_size[0], output_size[1]]: The pooled RoIs.
     """
-    if not torch.jit.is_scripting() and not torch.jit.is_tracing():
-        _log_api_usage_once(roi_align)
-        
     check_roi_boxes_shape(boxes)
     rois = boxes
     output_size = _pair(output_size)
@@ -340,7 +334,6 @@ class MultiScaleRotatedRoIAlign(nn.Module):
         canonical_level: int = 4,
     ):
         super().__init__()
-        _log_api_usage_once(self)
         if isinstance(output_size, int):
             output_size = (output_size, output_size)
         self.featmap_names = featmap_names

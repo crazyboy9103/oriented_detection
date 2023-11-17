@@ -18,10 +18,6 @@ from torchvision.models import (
     efficientnet_b1, 
     efficientnet_b2, 
     efficientnet_b3, 
-    efficientnet_b4, 
-    efficientnet_b5,
-    efficientnet_b6,
-    efficientnet_b7
 )
 from torchvision.models.detection.backbone_utils import _mobilenet_extractor, _resnet_fpn_extractor, _validate_trainable_layers, BackboneWithFPN
 # Weights
@@ -41,10 +37,6 @@ from torchvision.models.efficientnet import (
     EfficientNet_B1_Weights,
     EfficientNet_B2_Weights,
     EfficientNet_B3_Weights,
-    EfficientNet_B4_Weights,
-    EfficientNet_B5_Weights,
-    EfficientNet_B6_Weights,
-    EfficientNet_B7_Weights
 )
 
 from .roi_heads import RotatedFasterRCNNRoIHead, OrientedRCNNRoIHead
@@ -225,16 +217,13 @@ class GeneralizedRCNN(nn.Module):
         losses.update(detector_losses)
         losses.update(proposal_losses)
 
-        if torch.jit.is_scripting():
+        if self.training:
+            return losses
+        
+        if targets:
             return losses, detections
-        else:
-            if self.training:
-                return losses
-            
-            if targets:
-                return losses, detections
-            
-            return detections
+        
+        return detections
 
 class RotatedRCNNWrapper(GeneralizedRCNN):
     def __init__(

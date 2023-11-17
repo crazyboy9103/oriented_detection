@@ -1,7 +1,7 @@
 import argparse
 import os
 import shutil
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
+# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import torch
 import pytorch_lightning as pl
@@ -16,6 +16,7 @@ from datasets.mvtec import MVTecDataModule, MVTecDataset
 from datasets.dota import DotaDataModule, DotaDataset
 
 def main(args):
+    pl.seed_everything(2023)
     torch.set_float32_matmul_precision("medium")
     
     train_loader_kwargs = dict(
@@ -163,6 +164,8 @@ def main(args):
         deterministic=True,
         profiler="advanced",
         callbacks=callbacks,
+        num_sanity_val_steps=0,
+        
     )
     trainer.fit(
         model, 
@@ -194,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     
     parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])
-    parser.add_argument('--pretrained', type=str2bool, default=True)
+    parser.add_argument('--pretrained', type=str2bool, default=False)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)
     parser.add_argument('--skip_flip', type=str2bool, default=False)
