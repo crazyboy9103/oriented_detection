@@ -110,21 +110,20 @@ class ModelWrapper(LightningModule):
         images, targets = batch
         targets = [{k: v for k, v in t.items()} for t in targets]
         
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
+        # start = torch.cuda.Event(enable_timing=True)
+        # end = torch.cuda.Event(enable_timing=True)
         
-        start.record()
+        # start.record()
         loss_dict, outputs = self(images, targets)
-        end.record()
-        torch.cuda.synchronize()
-        elapsed_time = start.elapsed_time(end)
-        self.log('FPS', len(images)/(elapsed_time / 1000))
+        # end.record()
+        # torch.cuda.synchronize()
+        # elapsed_time = start.elapsed_time(end)
+        # self.log('FPS', len(images)/(elapsed_time / 1000))
         loss = sum(loss.item() for loss in loss_dict.values())
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
             
         self.log('valid-loss', loss)
-        # loss_dict.update({'valid-loss': loss})
         # skip image logging for sweeps
         if not hasattr(self, 'config') and batch_idx == 0:
             self.logger.experiment.log({
@@ -139,8 +138,6 @@ class ModelWrapper(LightningModule):
         self.detection_evaluator.accumulate(targets, outputs)
         self.neurocle_detection_evaluator.update_state(targets, outputs)
         
-        # return loss_dict
-
     def on_validation_epoch_end(self):
         aggregate_metrics, detailed_metrics= self.detection_evaluator.compute_metrics()
         print("detailed_metrics", detailed_metrics)

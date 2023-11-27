@@ -1,13 +1,11 @@
 import argparse
 import os
 import shutil
-# os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
-from pytorch_lightning.profilers import AdvancedProfiler
 
 from configs import TrainConfig, ModelConfig, Kwargs
 from lightning_modules import RotatedFasterRCNN, OrientedRCNN

@@ -1,5 +1,5 @@
 import os
-from typing import Union, Dict, Any, Iterable
+from typing import Dict, Any, Iterable
 
 import cv2
 import torch
@@ -7,8 +7,6 @@ from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 
 from ops import boxes as box_ops
-from datasets.mvtec import MVTecDataset
-from datasets.dota import DotaDataset
 
 FONT = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans-Bold.ttf')
 FONT = ImageFont.truetype(FONT, size=8)
