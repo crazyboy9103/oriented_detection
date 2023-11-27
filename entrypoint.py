@@ -14,6 +14,7 @@ from lightning_modules import RotatedFasterRCNN, OrientedRCNN
 from datasets.detdemo import DetDemoDataModule, DetDemoDataset
 from datasets.mvtec import MVTecDataModule, MVTecDataset
 from datasets.dota import DotaDataModule, DotaDataset
+from datasets.jmc import JMCDataModule, JMCDataset
 
 def main(args):
     pl.seed_everything(2023)
@@ -59,6 +60,15 @@ def main(args):
         )
         dataset = DetDemoDataset
 
+    elif args.dataset == "jmc":
+        datamodule = JMCDataModule(
+            "./datasets/jmc.pth",
+            "/datasets/jmc",
+            train_loader_kwargs,
+            test_loader_kwargs    
+        )
+        dataset = JMCDataset
+        
     else:
         raise ValueError("Invalid dataset!")
     
@@ -165,7 +175,6 @@ def main(args):
         profiler="advanced",
         callbacks=callbacks,
         num_sanity_val_steps=0,
-        
     )
     trainer.fit(
         model, 
@@ -179,9 +188,6 @@ def validate_args(args):
     if args.model_type == "oriented" and "32" not in args.precision:
         raise ValueError("Oriented R-CNN only supports 32-bit precision!")
     
-    
-    
-    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
     parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated', 'oriented'],
@@ -192,8 +198,8 @@ if __name__ == '__main__':
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--num_epochs', type=int, default=12)
-    parser.add_argument('--dataset', type=str, default='dota', choices=['mvtec', 'dota', 'detdemo'])
+    parser.add_argument('--num_epochs', type=int, default=36)
+    parser.add_argument('--dataset', type=str, default='jmc', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     
     parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])

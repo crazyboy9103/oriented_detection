@@ -141,4 +141,3 @@ This project integrates code from the following two different projects:
 
 1. torchvision is licensed under the BSD 3-Clause License. [Link to full license](https://github.com/pytorch/vision/blob/main/LICENSE)
 2. mmrotate is licensed under the Apache License 2.0. [Link to full license](https://github.com/open-mmlab/mmrotate/blob/main/LICENSE)
-

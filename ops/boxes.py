@@ -22,29 +22,6 @@ from mmrotate._C import (
     box_iou_rotated as _C_box_iou_rotated,
 )
 
-# TODO 
-def clip_rotated_boxes_to_image(oboxes: Tensor, size: Tuple[int, int]) -> Tensor:
-    """
-    Clip boxes so that they lie inside an image of size `size`.
-
-    Args:
-        boxes (Tensor[N, 5]): boxes in ``(cx, cy, w, h, a)`` format.
-        size (Tuple[height, width]): size of the image
-
-    Returns:
-        Tensor[N, 5]: clipped boxes
-    """
-    dim = oboxes.dim()
-    boxes_cx = oboxes[..., 0:1]
-    boxes_cy = oboxes[..., 1:2]
-    height, width = size
-    
-    boxes_cx = boxes_cx.clamp(min=0, max=width)
-    boxes_cy = boxes_cy.clamp(min=0, max=height)
-
-    clipped_boxes = torch.stack((boxes_cx, boxes_cy), dim=dim)
-    return clipped_boxes.reshape(oboxes.shape)
-
 def remove_small_rotated_boxes(oboxes: Tensor, min_size: float) -> Tensor:
     """
     Remove boxes which contains at least one side smaller than min_size.
@@ -94,7 +71,7 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float,
     """
     if boxes.shape[0] == 0:
         return None
-    
+       
     return _C_nms_rotated(boxes, scores, iou_threshold, multi_label)
 
 def batched_nms_rotated(
@@ -147,72 +124,4 @@ def batched_nms_rotated(
     boxes_for_nms = boxes.clone()  # avoid modifying the original values in boxes
     boxes_for_nms[:, :2] += offsets[:, None]
     keep = nms_rotated(boxes_for_nms, scores, iou_threshold)
-    return keep
-
-# TODO 
-def multiclass_nms_rotated(multi_bboxes,
-                           multi_scores,
-                           score_thr,
-                           nms_iou_threshold,
-                           score_factors=None,):
-    """NMS for multi-class bboxes.
-
-    Args:
-        multi_bboxes (torch.Tensor): shape (n, #class*5) or (n, 5)
-        multi_scores (torch.Tensor): shape (n, #class), where the last column
-            contains scores of the background class, but this will be ignored.
-        score_thr (float): bbox threshold, bboxes with scores lower than it
-            will not be considered.
-        nms (float): Config of NMS.
-        score_factors (Tensor, optional): The factors multiplied to scores
-            before applying NMS. Default to None.
-
-    Returns:
-        tuple (dets, labels, indices (optional)): tensors of shape (k, 5), \
-        (k), and (k). Dets are boxes with scores. Labels are 0-based.
-    """
-    num_classes = multi_scores.size(1) - 1
-    # exclude background category
-    if multi_bboxes.shape[1] > 5:
-        bboxes = multi_bboxes.view(multi_scores.size(0), -1, 5)
-    else:
-        bboxes = multi_bboxes[:, None].expand(multi_scores.size(0), num_classes, 5)
-    scores = multi_scores[:, :-1]
-
-    labels = torch.arange(num_classes, dtype=torch.long, device=scores.device)
-    labels = labels.view(1, -1).expand_as(scores)
-    bboxes = bboxes.reshape(-1, 5)
-    scores = scores.reshape(-1)
-    labels = labels.reshape(-1)
-
-    # remove low scoring boxes
-    valid_mask = scores > score_thr
-    if score_factors is not None:
-        # expand the shape to match original shape of score
-        score_factors = score_factors.view(-1, 1).expand(
-            multi_scores.size(0), num_classes)
-        score_factors = score_factors.reshape(-1)
-        scores = scores * score_factors
-
-    inds = valid_mask.nonzero(as_tuple=False).squeeze(1)
-    bboxes, scores, labels = bboxes[inds], scores[inds], labels[inds]
-
-    if bboxes.numel() == 0:
-        return inds
-
-    # Strictly, the maximum coordinates of the rotating box (x,y,w,h,a)
-    # should be calculated by polygon coordinates.
-    # But the conversion from rbbox to polygon will slow down the speed.
-    # So we use max(x,y) + max(w,h) as max coordinate
-    # which is larger than polygon max coordinate
-    # max(x1, y1, x2, y2,x3, y3, x4, y4)
-    max_coordinate = bboxes[:, :2].max() + bboxes[:, 2:4].max()
-    offsets = labels.to(bboxes) * (max_coordinate + 1)
-    if bboxes.size(-1) == 5:
-        bboxes_for_nms = bboxes.clone()
-        bboxes_for_nms[:, :2] = bboxes_for_nms[:, :2] + offsets[:, None]
-    else:
-        bboxes_for_nms = bboxes + offsets[:, None]
-        
-    keep = nms_rotated(bboxes_for_nms, scores, nms_iou_threshold)
     return keep

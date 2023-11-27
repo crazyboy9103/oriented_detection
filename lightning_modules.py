@@ -11,7 +11,7 @@ from configs import TrainConfig, ModelConfig, Kwargs
 from datasets.dota import DotaDataset
 from datasets.mvtec import MVTecDataset
 from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
-from scheduler import CosineAnnealingWarmUpRestartsDecay, LinearWarmUpMultiStepDecay
+from scheduler import LinearWarmUpMultiStepDecay
 from evaluation.neurocle_evaluator import DetectionEvaluator, NeurocleDetectionEvaluator
 from visualize_utils import plot_image
         
