@@ -171,6 +171,9 @@ def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
 def validate_args(args):
+    if args.dataset == "dota" and args.image_size not in (256, 512, 800):
+        raise ValueError("Invalid image size for DOTA dataset")
+    
     # TODO support other precision for oriented r-cnn
     if args.model_type == "oriented" and "32" not in args.precision:
         raise ValueError("Oriented R-CNN only supports 32-bit precision")
@@ -194,9 +197,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='jmc', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
-    parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])
-    parser.add_argument('--skip_flip', type=str2bool, default=True)
-    parser.add_argument('--skip_image_transform', type=str2bool, default=True)
+    parser.add_argument('--image_size', type=int, default=256)
+    parser.add_argument('--skip_flip', type=str2bool, default=False)
+    parser.add_argument('--skip_image_transform', type=str2bool, default=False)
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     # Logging arguments
     parser.add_argument('--wandb', action='store_true', default=True)

@@ -50,7 +50,7 @@ class ModelWrapper(LightningModule):
             num_classes=self.train_config['num_classes']-1
         )
         
-        self.neurocle_detection_evaluator = NeurocleDetectionEvaluator(0.5, 0.5)
+        # self.neurocle_detection_evaluator = NeurocleDetectionEvaluator(0.5, 0.5)
     
     def setup(self, stage: Optional[str] = None):
         self.logger.experiment.config.update(self.train_config)
@@ -66,17 +66,21 @@ class ModelWrapper(LightningModule):
 
         loss_dict = self(images, targets)
         
-        # self.current_epoch 
         loss = sum(loss for loss in loss_dict.values())
 
         for k, v in loss_dict.items():
             self.log(f'train-{k}', v.item())
         self.log('train-loss', loss.item())
-        if batch_idx % 10 == 0:
-            torch.cuda.empty_cache()
-            gc.collect()
+        # if batch_idx % 10 == 0:
+        #     torch.cuda.empty_cache()
+        #     gc.collect()
         return loss
 
+    def on_train_epoch_end(self):
+        torch.cuda.empty_cache()
+        gc.collect()
+        return super().on_train_epoch_end()
+        
     def validation_step(self, batch, batch_idx):
         images, targets = batch
         targets = [{k: v for k, v in t.items()} for t in targets]
@@ -100,7 +104,7 @@ class ModelWrapper(LightningModule):
             })
             
         self.detection_evaluator.accumulate(targets, outputs)
-        self.neurocle_detection_evaluator.update_state(targets, outputs)
+        # self.neurocle_detection_evaluator.update_state(targets, outputs)
         
     def on_validation_epoch_end(self):
         aggregate_metrics, detailed_metrics= self.detection_evaluator.compute_metrics()
@@ -112,11 +116,11 @@ class ModelWrapper(LightningModule):
         
         self.detection_evaluator.reset()
         
-        neurocle_result = self.neurocle_detection_evaluator.result()
-        for key, value in neurocle_result.items():
-            self.log(f"valid-{key}", value)
-        print("neurocle_result", neurocle_result)
-        self.neurocle_detection_evaluator.reset_states()
+        # neurocle_result = self.neurocle_detection_evaluator.result()
+        # for key, value in neurocle_result.items():
+        #     self.log(f"valid-{key}", value)
+        # print("neurocle_result", neurocle_result)
+        # self.neurocle_detection_evaluator.reset_states()
         
         torch.cuda.empty_cache()
         gc.collect()
@@ -138,10 +142,10 @@ class ModelWrapper(LightningModule):
 class RotatedFasterRCNN(ModelWrapper):
     def __init__(
         self, 
-        train_config: Optional[dataclass], 
-        model_config: Optional[dataclass],
-        kwargs: Optional[dataclass],
-        dataset: Type[BaseDataset],
+        train_config, 
+        model_config,
+        kwargs,
+        dataset,
     ):
         super(RotatedFasterRCNN, self).__init__(train_config, model_config, kwargs, dataset)
         self.model = faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
@@ -149,10 +153,10 @@ class RotatedFasterRCNN(ModelWrapper):
 class OrientedRCNN(ModelWrapper):
     def __init__(
         self, 
-        train_config: Optional[dataclass], 
-        model_config: Optional[dataclass],
-        kwargs: Optional[dataclass],
-        dataset: Type[BaseDataset],
+        train_config, 
+        model_config,
+        kwargs,
+        dataset,
     ):
         super(OrientedRCNN, self).__init__(train_config, model_config, kwargs, dataset)
         self.model = oriented_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)

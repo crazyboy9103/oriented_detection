@@ -35,10 +35,13 @@ class DetectionEvaluator:
         # these contain tensors for each class
         # e.g. self.targets[1] contains a list of tensors containing all ground truth boxes for class 1
         # each index in the list corresponds to a different image
-        self.targets = {class_idx: [] for class_idx in range(1, self.num_classes+1)}
-        self.detections = {class_idx: [] for class_idx in range(1, self.num_classes+1)}
-        self.scores = {class_idx: [] for class_idx in range(1, self.num_classes+1)}
-    
+        self.targets = {}
+        self.detections = {}
+        self.scores = {}
+        for class_idx in range(1, self.num_classes+1):
+            self.targets[class_idx] = [] 
+            self.detections[class_idx] = [] 
+            self.scores[class_idx] = [] 
     def accumulate(
         self, 
         targets: List[Dict[str, Tensor]],
@@ -210,8 +213,6 @@ class DetectionEvaluator:
         dt_ious = torch.as_tensor(dt_ious)    
         gt_angles = torch.as_tensor(gt_angles)
         dt_angles = torch.as_tensor(dt_angles)
-        
-        
         
         TP_cumsum = torch.cumsum(TP, dim=0)
         FP_cumsum = torch.cumsum(FP, dim=0)
