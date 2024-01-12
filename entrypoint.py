@@ -85,11 +85,12 @@ def main(args):
         freeze_bn=args.freeze_bn
     )
     
+    finetuning = args.pretrained | args.pretrained_backbone
     model_config = ModelConfig(
         min_size = args.image_size,
         max_size = args.image_size,
-        image_mean = dataset.IMAGE_MEAN,
-        image_std = dataset.IMAGE_STD,
+        image_mean = (0.485, 0.456, 0.406) if finetuning else dataset.IMAGE_MEAN,
+        image_std = (0.229, 0.224, 0.225) if finetuning else dataset.IMAGE_STD,
         rpn_pre_nms_top_n_train = 2000,
         rpn_pre_nms_top_n_test = 2000,
         rpn_post_nms_top_n_train = 2000,
@@ -106,7 +107,7 @@ def main(args):
         box_detections_per_img = 100,
         box_fg_iou_thresh = 0.5,
         box_bg_iou_thresh = 0.5,
-        box_batch_size_per_image = 512, # 512
+        box_batch_size_per_image = 512,
         box_positive_fraction = 0.25,
         bbox_reg_weights = (10, 10, 5, 5, 10),
         
@@ -117,7 +118,6 @@ def main(args):
         _skip_flip = args.skip_flip,
         _skip_image_transform = args.skip_image_transform,
     )
-    steps_per_epoch = len(datamodule.train_dataset) // args.batch_size
     if args.model_type == 'rotated':
         detector = RotatedFasterRCNN
         
@@ -128,12 +128,10 @@ def main(args):
         raise ValueError("Invalid model type!")
     
     model = detector(
-        config={},
         train_config=train_config,
         model_config=model_config,
         kwargs=kwargs,
         dataset=dataset,
-        steps_per_epoch=steps_per_epoch
     )
     
     logger = None  
@@ -149,11 +147,6 @@ def main(args):
         
     
     checkpoint_path = f"./checkpoints/{args.model_type}/{args.backbone_type}/{args.dataset}_{args.image_size}"
-    if os.path.exists(checkpoint_path):
-        shutil.rmtree(checkpoint_path)
-    os.makedirs(checkpoint_path, exist_ok=True)
-    
-    
     callbacks = [
         ModelCheckpoint(dirpath=checkpoint_path, save_top_k=2, monitor="valid-mAP", mode="max"),
         LearningRateMonitor(logging_interval='step')
@@ -192,12 +185,12 @@ if __name__ == '__main__':
     parser.add_argument('--pretrained', type=str2bool, default=False)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)
-    parser.add_argument('--trainable_backbone_layers', type=int, default=4, choices=[0, 1, 2, 3, 4, 5, 6]) # 5: one batchnorm layer # max 5 for resnet/efnet and 6 for mv3l
+    parser.add_argument('--trainable_backbone_layers', type=int, default=4, choices=[0, 1, 2, 3, 4, 5, 6]) # 5: one batchnorm layer # max 5 for resnet & efnet, 6 for mv3l
     
     # Training arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='jmc', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])

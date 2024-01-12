@@ -18,12 +18,10 @@ from visualize_utils import plot_image
 class ModelWrapper(LightningModule):
     def __init__(
         self, 
-        config: Optional[dict],
         train_config: Optional[dataclass], 
         model_config: Optional[dataclass],
         kwargs: Optional[dataclass],
         dataset: Type[BaseDataset],
-        steps_per_epoch: int
     ):
         super(ModelWrapper, self).__init__()
         
@@ -44,16 +42,7 @@ class ModelWrapper(LightningModule):
         self.kwargs = asdict(kwargs)
         self.dataset = dataset
         
-        if config:
-            self.config = self._parse_config(config)
-            
-            self.train_config.update({k: v for k, v in self.config.items() if k in self.train_config})
-            self.model_config.update({k: v for k, v in self.config.items() if k in self.model_config})
-            self.kwargs.update({k: v for k, v in self.config.items() if k in self.kwargs})
-        
         self.lr = self.train_config['learning_rate']
-        
-        self.steps_per_epoch = steps_per_epoch
         
         self.detection_evaluator = DetectionEvaluator(
             iou_threshold=0.5,
@@ -63,22 +52,6 @@ class ModelWrapper(LightningModule):
         
         self.neurocle_detection_evaluator = NeurocleDetectionEvaluator(0.5, 0.5)
     
-    def _parse_config(self, config):
-        # Avoid in place modification
-        # As wandb config does not accept boolean values, they must be manually converted
-        config = dict(config.items())
-        for k, v in config.items():
-            if k == "trainable_backbone_layers":
-                config[k] = int(v)
-            
-            elif k == "learning_rate":
-                config[k] = float(v)
-            
-            elif k in ("pretrained", "pretrained_backbone", "_skip_flip", "_skip_image_transform", "freeze_bn"):
-                config[k] = config[k] == "True"
-                
-        return config
-                
     def setup(self, stage: Optional[str] = None):
         self.logger.experiment.config.update(self.train_config)
         self.logger.experiment.config.update(self.model_config)
@@ -150,9 +123,10 @@ class ModelWrapper(LightningModule):
         
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
+        steps_per_epoch = self.trainer.estimated_stepping_batches // self.trainer.max_epochs
         # following milestones, warmup_iters are arbitrarily chosen
-        first, second = self.steps_per_epoch * int(self.trainer.max_epochs * 4/6), self.steps_per_epoch * int(self.trainer.max_epochs * 5/6)
-        warmup_iters = self.steps_per_epoch * int(self.trainer.max_epochs * 1/6)
+        first, second = steps_per_epoch * int(self.trainer.max_epochs * 4/6), steps_per_epoch * int(self.trainer.max_epochs * 5/6)
+        warmup_iters = steps_per_epoch * int(self.trainer.max_epochs * 1/6)
         scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[first, second], gamma=1/3, warmup_iters=warmup_iters)
         scheduler_config = {
             "scheduler": scheduler,
@@ -164,26 +138,22 @@ class ModelWrapper(LightningModule):
 class RotatedFasterRCNN(ModelWrapper):
     def __init__(
         self, 
-        config: Optional[dict],
         train_config: Optional[dataclass], 
         model_config: Optional[dataclass],
         kwargs: Optional[dataclass],
         dataset: Type[BaseDataset],
-        steps_per_epoch: int
     ):
-        super(RotatedFasterRCNN, self).__init__(config, train_config, model_config, kwargs, dataset, steps_per_epoch)
+        super(RotatedFasterRCNN, self).__init__(train_config, model_config, kwargs, dataset)
         self.model = faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
 
 class OrientedRCNN(ModelWrapper):
     def __init__(
         self, 
-        config: Optional[dict],
         train_config: Optional[dataclass], 
         model_config: Optional[dataclass],
         kwargs: Optional[dataclass],
         dataset: Type[BaseDataset],
-        steps_per_epoch: int
     ):
-        super(OrientedRCNN, self).__init__(config, train_config, model_config, kwargs, dataset, steps_per_epoch)
+        super(OrientedRCNN, self).__init__(train_config, model_config, kwargs, dataset)
         self.model = oriented_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
     

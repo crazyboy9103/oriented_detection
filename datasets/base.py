@@ -87,10 +87,10 @@ class BaseDataset(Dataset):
             gt_difficulty = []
             
             gt_bboxes = []
-            gt_areas = []
+            # gt_areas = []
 
             gt_obboxes = []
-            gt_oareas = []
+            # gt_oareas = []
             
             gt_labels = []
             gt_polygons = []
@@ -126,8 +126,8 @@ class BaseDataset(Dataset):
                     gt_labels.append(label)
                     gt_polygons.append(poly)
                     
-                    gt_areas.append((hbb[2] - hbb[0]) * (hbb[3] - hbb[1]))
-                    gt_oareas.append(obb[2] * obb[3])
+                    # gt_areas.append((hbb[2] - hbb[0]) * (hbb[3] - hbb[1]))
+                    # gt_oareas.append(obb[2] * obb[3])
                                             
             ann = {}
             if gt_bboxes:
@@ -138,15 +138,15 @@ class BaseDataset(Dataset):
                 ann['image_path'] = img_file
                 ann['ann_path'] = ann_file
                 ann['bboxes'] = torch.tensor(np.array(gt_bboxes), dtype=torch.float32)
-                ann['area'] = torch.tensor(np.array(gt_areas), dtype=torch.float32)
+                # ann['area'] = torch.tensor(np.array(gt_areas), dtype=torch.float32)
                 
                 ann['oboxes'] = torch.tensor(np.array(gt_obboxes), dtype=torch.float32)
-                ann['oarea'] = torch.tensor(np.array(gt_oareas), dtype=torch.float32)
+                # ann['oarea'] = torch.tensor(np.array(gt_oareas), dtype=torch.float32)
                 
                 ann['labels'] = torch.tensor(np.array(gt_labels), dtype=torch.int64)
                 ann['polygons'] = torch.tensor(np.array(gt_polygons), dtype=torch.float32)
                 ann['image_id'] = torch.tensor([image_id], dtype=torch.int64)
-                ann['iscrowd'] = torch.zeros((len(gt_bboxes),), dtype=torch.int64)
+                # ann['iscrowd'] = torch.zeros((len(gt_bboxes),), dtype=torch.int64)
                 
                 image_id += 1
                 
@@ -161,7 +161,7 @@ class BaseDataset(Dataset):
     
     def __getitem__(self, idx):
         ann = self.data[idx]
-        image = read_image(ann['image_path'], ImageReadMode.RGB) / 255.0
+        image = read_image(ann['image_path'], ImageReadMode.RGB).float() / 255.0
         return image, ann
 
 def collate_fn(batch):
