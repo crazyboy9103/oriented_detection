@@ -1,9 +1,8 @@
 Cython
 ipykernel
 matplotlib
-opencv-python==4.8.0.76
+opencv-python-headless
 pytorch-lightning
 scipy
-torch
 torchvision
 wandb

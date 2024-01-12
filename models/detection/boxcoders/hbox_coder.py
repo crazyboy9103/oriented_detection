@@ -89,7 +89,7 @@ class XYXY_XYWHA_BoxCoder(BaseBoxCoder):
         Args:
             weights (Tuple[float, float, float, float, float]): weights for (dx, dy, dw, dh, da)
         """
-        super(XYXY_XYWHA_BoxCoder, self).__init__(weights)
+        super(XYXY_XYWHA_BoxCoder, self).__init__(weights, bbox_xform_clip)
 
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         assert gt_bboxes.size(0) == bboxes.size(0)
