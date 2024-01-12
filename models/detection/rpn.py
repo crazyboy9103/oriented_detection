@@ -189,7 +189,7 @@ class RegionProposalNetwork(nn.Module):
             else:
                 if self.regression_dim == 6:
                     anchors_per_image = box_ops.hbb2obb(anchors_per_image)
-
+                    
                 match_quality_matrix = self.box_similarity(gt_boxes, anchors_per_image)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
                 # get the targets corresponding GT for each proposal

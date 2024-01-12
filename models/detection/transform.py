@@ -3,7 +3,6 @@ from typing import Any, Dict, List, Optional, Tuple, Literal
 
 import numpy as np
 import torch
-import torchvision
 from torch import nn, Tensor
 from torchvision import transforms as T
 from torchvision.transforms import functional as TF
@@ -86,18 +85,6 @@ def _flip_oboxes(oboxes: Tensor, new_size: List[int], direction: Literal['horizo
     flipped[rotated_flag, 2] = oboxes[rotated_flag, 3]
     flipped[rotated_flag, 3] = oboxes[rotated_flag, 2]
     return flipped.reshape(orig_shape)
-
-def _resize_polygons(polygons: Tensor, original_size: List[int], new_size: List[int]) -> Tensor:
-    ratios = [
-        torch.tensor(s, dtype=torch.float32, device=polygons.device)
-        / torch.tensor(s_orig, dtype=torch.float32, device=polygons.device)
-        for s, s_orig in zip(new_size, original_size)
-    ]
-    ratio_height, ratio_width = ratios
-    x1, y1, x2, y2, x3, y3, x4, y4 = polygons.unbind(1)
-    x1, x2, x3, x4 = x1 * ratio_width, x2 * ratio_width, x3 * ratio_width, x4 * ratio_width
-    y1, y2, y3, y4 = y1 * ratio_height, y2 * ratio_height, y3 * ratio_height, y4 * ratio_height
-    return torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), dim=1)
 
 def _resize_image(
     image: Tensor,

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Optional, Type
 import gc
 
 import torch
@@ -8,8 +8,7 @@ from pytorch_lightning import LightningModule
 import wandb 
 
 from configs import TrainConfig, ModelConfig, Kwargs
-from datasets.dota import DotaDataset
-from datasets.mvtec import MVTecDataset
+from datasets.base import BaseDataset
 from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
 from scheduler import LinearWarmUpMultiStepDecay
 from evaluation.neurocle_evaluator import DetectionEvaluator, NeurocleDetectionEvaluator
@@ -19,12 +18,12 @@ from visualize_utils import plot_image
 class ModelWrapper(LightningModule):
     def __init__(
         self, 
-        config: Optional[dict] = None,
-        train_config: Optional[dataclass] = None, 
-        model_config: Optional[dataclass] = None,
-        kwargs: Optional[dataclass] = None,
-        dataset: DotaDataset|MVTecDataset = MVTecDataset,
-        steps_per_epoch: int = None
+        config: Optional[dict],
+        train_config: Optional[dataclass], 
+        model_config: Optional[dataclass],
+        kwargs: Optional[dataclass],
+        dataset: Type[BaseDataset],
+        steps_per_epoch: int
     ):
         super(ModelWrapper, self).__init__()
         
@@ -53,7 +52,6 @@ class ModelWrapper(LightningModule):
             self.kwargs.update({k: v for k, v in self.config.items() if k in self.kwargs})
         
         self.lr = self.train_config['learning_rate']
-        self.total_epochs = self.kwargs['epochs']
         
         self.steps_per_epoch = steps_per_epoch
         
@@ -110,27 +108,20 @@ class ModelWrapper(LightningModule):
         images, targets = batch
         targets = [{k: v for k, v in t.items()} for t in targets]
         
-        # start = torch.cuda.Event(enable_timing=True)
-        # end = torch.cuda.Event(enable_timing=True)
-        
-        # start.record()
         loss_dict, outputs = self(images, targets)
-        # end.record()
-        # torch.cuda.synchronize()
-        # elapsed_time = start.elapsed_time(end)
-        # self.log('FPS', len(images)/(elapsed_time / 1000))
         loss = sum(loss.item() for loss in loss_dict.values())
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
             
         self.log('valid-loss', loss)
         # skip image logging for sweeps
-        if not hasattr(self, 'config') and batch_idx == 0:
+        if not hasattr(self, 'config') and batch_idx == self.trainer.num_val_batches[0]-3:
+            size = self.model_config.get("min_size") * 2 # upsample for better visualization
             self.logger.experiment.log({
                 "images": [
                     wandb.Image(pil_image, caption=image_path.split('/')[-1])
                     for pil_image, image_path in (
-                        plot_image(image, output, target, self.dataset, 0.5) for image, output, target in zip(images, outputs, targets)
+                        plot_image(image, output, target, self.dataset, 0.5, resize=(size, size)) for image, output, target in zip(images, outputs, targets)
                     )
                 ]
             })
@@ -160,8 +151,8 @@ class ModelWrapper(LightningModule):
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
         # following milestones, warmup_iters are arbitrarily chosen
-        first, second = self.steps_per_epoch * int(self.total_epochs * 4/6), self.steps_per_epoch * int(self.total_epochs * 5/6)
-        warmup_iters = self.steps_per_epoch * int(self.total_epochs * 1/6)
+        first, second = self.steps_per_epoch * int(self.trainer.max_epochs * 4/6), self.steps_per_epoch * int(self.trainer.max_epochs * 5/6)
+        warmup_iters = self.steps_per_epoch * int(self.trainer.max_epochs * 1/6)
         scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[first, second], gamma=1/3, warmup_iters=warmup_iters)
         scheduler_config = {
             "scheduler": scheduler,
@@ -173,12 +164,12 @@ class ModelWrapper(LightningModule):
 class RotatedFasterRCNN(ModelWrapper):
     def __init__(
         self, 
-        config: Optional[dict] = None,
-        train_config: Optional[dataclass] = None, 
-        model_config: Optional[dataclass] = None,
-        kwargs: Optional[dataclass] = None,
-        dataset: DotaDataset|MVTecDataset = MVTecDataset,
-        steps_per_epoch: int = None
+        config: Optional[dict],
+        train_config: Optional[dataclass], 
+        model_config: Optional[dataclass],
+        kwargs: Optional[dataclass],
+        dataset: Type[BaseDataset],
+        steps_per_epoch: int
     ):
         super(RotatedFasterRCNN, self).__init__(config, train_config, model_config, kwargs, dataset, steps_per_epoch)
         self.model = faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
@@ -186,12 +177,12 @@ class RotatedFasterRCNN(ModelWrapper):
 class OrientedRCNN(ModelWrapper):
     def __init__(
         self, 
-        config: Optional[dict] = None,
-        train_config: Optional[dataclass] = None, 
-        model_config: Optional[dataclass] = None,
-        kwargs: Optional[dataclass] = None,
-        dataset: DotaDataset|MVTecDataset = MVTecDataset,
-        steps_per_epoch: int = None
+        config: Optional[dict],
+        train_config: Optional[dataclass], 
+        model_config: Optional[dataclass],
+        kwargs: Optional[dataclass],
+        dataset: Type[BaseDataset],
+        steps_per_epoch: int
     ):
         super(OrientedRCNN, self).__init__(config, train_config, model_config, kwargs, dataset, steps_per_epoch)
         self.model = oriented_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)

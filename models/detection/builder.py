@@ -322,7 +322,7 @@ def model_builder(
     trainable_backbone_layers: Optional[int] = None,
     model: Optional[nn.Module] = None,
     freeze_bn: bool = True,
-    backbone_type: Literal["mobilenetv3large", "resnet50", "resnet18"] =  "mobilenetv3large",
+    backbone_type: str = "mobilenetv3large",
     roi_pooler: MultiScaleRotatedRoIAlign|MultiScaleRoIAlign = MultiScaleRoIAlign,
     **kwargs
 ):
@@ -336,8 +336,6 @@ def model_builder(
         
         elif backbone_type == "resnet18":
             print("[Builder] No COCO pretrained weights for ResNet18, using ImageNet weights for backbone instead.")
-            weights_backbone = ResNet18_Weights.IMAGENET1K_V1
-            weights_backbone = ResNet18_Weights.verify(weights_backbone)
             
         elif backbone_type == "mobilenetv3large":
             weights = FasterRCNN_MobileNet_V3_Large_FPN_Weights.COCO_V1	
@@ -352,7 +350,8 @@ def model_builder(
             weights_backbone = ResNet50_Weights.verify(weights_backbone)
         
         elif backbone_type == "resnet18":
-            pass
+            weights_backbone = ResNet18_Weights.IMAGENET1K_V1
+            weights_backbone = ResNet18_Weights.verify(weights_backbone)
             
         elif backbone_type == "mobilenetv3large":
             weights_backbone = MobileNet_V3_Large_Weights.IMAGENET1K_V1	
@@ -389,59 +388,21 @@ def model_builder(
     elif "efficientnet" in backbone_type:
         max_trainable_backbone_layers = 5
     
-    trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=max_trainable_backbone_layers, default_value=3)
+    trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=max_trainable_backbone_layers, default_value=5)
 
+    # Backbone
     if backbone_type == "resnet50":
         backbone = resnet50(weights=weights_backbone, progress=progress)
         backbone = _resnet_fpn_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
     
-        anchor_sizes = (
-            (
-                4,
-                8,
-                16,
-                32,
-                64
-            ),
-        ) * 5
-        aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
-        
-        rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
-    
     elif backbone_type == "resnet18":
         backbone = resnet18(weights=weights_backbone, progress=progress)
         backbone = _resnet_fpn_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
-    
-        anchor_sizes = (
-            (
-                4,
-                8,
-                16,
-                32,
-                64
-            ),
-        ) * 5
-        aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
-        
-        rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
         
     elif backbone_type == "mobilenetv3large":
         backbone = mobilenet_v3_large(weights=weights_backbone, progress=progress)	
         backbone = _mobilenet_extractor(backbone, fpn=True, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)	
-        anchor_sizes = (	
-            (	
-                4,
-                8,
-                16,
-                32,
-                64
-            ),	
-        ) * 5	
-            
-        aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)	
-            
-        rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
-    
+
     elif "efficientnet" in backbone_type:
         try:
             backbone = globals().get(backbone_type)(weights=weights_backbone, progress=progress)
@@ -450,33 +411,30 @@ def model_builder(
             raise ValueError(f"Unknown EfficientNet type {backbone_type}")
         
         backbone = _efficientnet_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
-        anchor_sizes = (
-            (
-                4,
-                8,
-                16,
-                32,
-                64
-            ),
-        ) * 5
-        
-        aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
-        
-        rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios)
     
+    # Anchors
+    anchor_sizes = (
+        (
+            4,
+            8,
+            16,
+            32,
+            64
+        ),
+    ) * 5
+    
+    aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
+    
+    rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios) 
+    
+    pool_size = 7
     
     box_head = FastRCNNConvFCHead(
-        (backbone.out_channels, 7, 7), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
+        (backbone.out_channels, pool_size, pool_size), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
     )
     
-    if backbone_type in ("resnet50", "resnet18"):
-        box_roi_pool = roi_pooler(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=2)
-    
-    elif backbone_type == "mobilenetv3large":
-        box_roi_pool = roi_pooler(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=2)
-    
-    elif "efficientnet" in backbone_type:
-        box_roi_pool = roi_pooler(featmap_names=["0", "1", "2", "3"], output_size=7, sampling_ratio=2)
+    # Roi pooler
+    box_roi_pool = roi_pooler(featmap_names=["0", "1", "2", "3"], output_size=pool_size, sampling_ratio=2)
     
     model = model(
         backbone,

@@ -16,9 +16,9 @@ class BaseBoxCoder(metaclass=ABCMeta):
         self.weights = weights
         self.bbox_xform_clip = bbox_xform_clip
         
-    def _make_weights_compatible(self, gt_bboxes: Tensor):
-        dtype = gt_bboxes.dtype
-        device = gt_bboxes.device
+    def _make_weights_compatible(self, bboxes: Tensor):
+        dtype = bboxes.dtype
+        device = bboxes.device
         weights = torch.as_tensor(self.weights, dtype=dtype, device=device)
         return weights
     
@@ -47,7 +47,7 @@ class BaseBoxCoder(metaclass=ABCMeta):
         Args:
             gt_bboxes (Tensor): concatenated gt_bboxes
             bboxes (Tensor): concatenated reference boxes
-            weights (Tensor): weights for ``(x, y, w, h, (optional) a)``
+            weights (Tensor): weights for box parameters
             
         Returns:
             targets (Tensor): concatenated encoded boxes 
@@ -91,7 +91,7 @@ class BaseBoxCoder(metaclass=ABCMeta):
         Args:
             pred_bboxes (Tensor): concatenated encoded boxes 
             bboxes (Tensor): concatenated reference boxes
-            weights (Tensor): weights for box parameters used during encoding and decoding
+            weights (Tensor): weights for box parameters
             box_sum (int): number of boxes
         Returns:
             decoded_boxes (Tensor): concatenated decoded boxes 

@@ -136,6 +136,7 @@ python entrypoint.py \
 | `--skip_image_transform`      | Skip random image transformation                             | `True`, `False`         |
 | `--trainable_backbone_layers` | Set the number of trainable backbone layers                  | `1`, `2`, `3`, `4`, `5` |
 | `--learning_rate`             | Set the learning rate for training                           | Numerical values > 0    |
+
 ## Licenses
 This project integrates code from the following two different projects:
 

@@ -44,4 +44,3 @@ class ModelConfig:
 class Kwargs:
     _skip_flip: bool = False
     _skip_image_transform: bool = False
-    epochs: int = 12

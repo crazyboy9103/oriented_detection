@@ -3,11 +3,10 @@ from typing import List, Tuple
 from torch.nn import functional as F
 from torch import nn, Tensor
 import torch
-
 class FocalLoss(nn.Module):
     def __init__(self, weight=None, gamma=2, reduction='mean'):
         super(FocalLoss, self).__init__()
-        self.weight = weight #weight parameter will act as the alpha parameter to balance class weights
+        self.weight = weight # weight parameter will act as the alpha parameter to balance class weights
         self.gamma = gamma
         self.reduction = reduction
         
@@ -37,9 +36,8 @@ def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_ta
     
     labels = torch.cat(labels, dim=0)
     classification_loss = F.cross_entropy(class_logits, labels)
-        # classification_loss = FocalLoss()(class_logits, labels)
+    # classification_loss = FocalLoss()(class_logits, labels)
         
-    # pos_inds = torch.where(labels > 0)[0]
     pos_inds = (labels > 0).nonzero().squeeze()
     labels_pos = labels[pos_inds]
     obox_regression_targets = torch.cat(obox_regression_targets, dim=0)

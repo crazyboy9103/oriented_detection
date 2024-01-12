@@ -9,10 +9,14 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor, proj_xy: b
     """
     Encode a set of proposals with respect to some
     reference boxes
+    
+    ! IMPORTANT !
+    Rest box coders use (x1, y1, x2, y2) format for bboxes, but this one uses (cx, cy, w, h, a).
+    This is due to the fact that Oriented RPN outputs rotated proposals, unlike the standard RPN used in Faster R-CNN.
 
     Args:
         gt_bboxes (Tensor[-1, 5]): rotated reference boxes ``(cx, cy, w, h, a)``
-        bboxes (Tensor[-1, 5]): boxes to be encoded ``(cx, cy, w, h, a)``
+        bboxes (Tensor[-1, 5]): boxes to be encoded !!``(cx, cy, w, h, a)``!!
         weights (Tensor[5]): the weights for ``(x, y, w, h, a)``
     """
 
@@ -46,11 +50,11 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor, proj_xy: b
     targets_dh = wh * torch.log(gt_heights / ex_heights)
     targets_da = wa * (gt_angles - ex_angles)
     
-    targets_dx.unsqueeze_(1)
-    targets_dy.unsqueeze_(1)
-    targets_dw.unsqueeze_(1)
-    targets_dh.unsqueeze_(1)
-    targets_da.unsqueeze_(1)
+    targets_dx = targets_dx.unsqueeze(1)
+    targets_dy = targets_dy.unsqueeze(1)
+    targets_dw = targets_dw.unsqueeze(1)
+    targets_dh = targets_dh.unsqueeze(1)
+    targets_da = targets_da.unsqueeze(1)
     targets = torch.cat([targets_dx, targets_dy, targets_dw, targets_dh, targets_da], dim=1)
     return targets
 

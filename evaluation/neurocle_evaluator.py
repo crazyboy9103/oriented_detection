@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import torch
 from torch import Tensor
@@ -239,6 +239,7 @@ class DetectionEvaluator:
         mean_modulated_iou = modulated_ious.mean().item()
         return precision, recall, f1_score, AP, mean_iou, mean_modulated_iou
 
+# Taken from roaster
 class NeurocleDetectionEvaluator:
     def __init__(
         self, bbox_score_threshold: float = 0.5, gt_dt_iou_threshold: float = 0.5

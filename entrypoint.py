@@ -22,13 +22,15 @@ def main(args):
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=True, 
-        pin_memory=True
+        pin_memory=True,
+        persistent_workers=True
     )
     test_loader_kwargs = dict(
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=False, 
-        pin_memory=True
+        pin_memory=True,
+        persistent_workers=True
     )
 
     if args.dataset == 'dota':
@@ -114,31 +116,25 @@ def main(args):
     kwargs = Kwargs(
         _skip_flip = args.skip_flip,
         _skip_image_transform = args.skip_image_transform,
-        epochs = args.num_epochs,
     )
     steps_per_epoch = len(datamodule.train_dataset) // args.batch_size
     if args.model_type == 'rotated':
-        model = RotatedFasterRCNN(
-            config={},
-            train_config=train_config,
-            model_config=model_config,
-            kwargs=kwargs,
-            dataset=dataset,
-            steps_per_epoch=steps_per_epoch
-        )
+        detector = RotatedFasterRCNN
         
     elif args.model_type == 'oriented':
-        model = OrientedRCNN(
-            config={},
-            train_config=train_config,
-            model_config=model_config,
-            kwargs=kwargs,
-            dataset=dataset,
-            steps_per_epoch=steps_per_epoch
-        )
-    
+        detector = OrientedRCNN
+        
     else:
         raise ValueError("Invalid model type!")
+    
+    model = detector(
+        config={},
+        train_config=train_config,
+        model_config=model_config,
+        kwargs=kwargs,
+        dataset=dataset,
+        steps_per_epoch=steps_per_epoch
+    )
     
     logger = None  
     if args.wandb:
@@ -170,12 +166,11 @@ def main(args):
         precision=args.precision,
         benchmark=True,
         deterministic=True,
-        profiler="advanced",
         callbacks=callbacks,
         num_sanity_val_steps=0,
     )
     trainer.fit(
-        model, 
+        model,
         datamodule=datamodule,
     )
     
@@ -183,31 +178,36 @@ def str2bool(v):
     return v.lower() in ("yes", "true", "t", "1")
 
 def validate_args(args):
+    # TODO support other precision for oriented r-cnn
     if args.model_type == "oriented" and "32" not in args.precision:
-        raise ValueError("Oriented R-CNN only supports 32-bit precision!")
+        raise ValueError("Oriented R-CNN only supports 32-bit precision")
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
-    parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated', 'oriented'],
+    # Model arguments
+    parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
-    parser.add_argument('--backbone_type', type=str, default="mobilenetv3large", choices=["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"])
-    parser.add_argument('--wandb', action='store_true', default=True)
-    # Add other necessary arguments
-    parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--num_epochs', type=int, default=36)
-    parser.add_argument('--dataset', type=str, default='jmc', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
-    parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
-    
-    parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])
+    parser.add_argument('--backbone_type', type=str, default="mobilenetv3large", 
+                        choices=["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"])
     parser.add_argument('--pretrained', type=str2bool, default=False)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)
-    parser.add_argument('--skip_flip', type=str2bool, default=False)
+    parser.add_argument('--trainable_backbone_layers', type=int, default=4, choices=[0, 1, 2, 3, 4, 5, 6]) # 5: one batchnorm layer # max 5 for resnet/efnet and 6 for mv3l
+    
+    # Training arguments
+    parser.add_argument('--gradient_clip_val', type=float, default=35.0)
+    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_epochs', type=int, default=12)
+    parser.add_argument('--dataset', type=str, default='jmc', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
+    parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--image_size', type=int, default=256, choices=[256, 512, 800])
+    parser.add_argument('--skip_flip', type=str2bool, default=True)
     parser.add_argument('--skip_image_transform', type=str2bool, default=True)
-    parser.add_argument('--trainable_backbone_layers', type=int, default=4, choices=[0, 1, 2, 3, 4, 5, 6]) # 5: one batchnorm layer # max 5 for resnet50 and 6 for mobilenetv3large
     parser.add_argument('--learning_rate', type=float, default=0.0001)
+    # Logging arguments
+    parser.add_argument('--wandb', action='store_true', default=True)
+
     args = parser.parse_args()
     validate_args(args)
     main(args)

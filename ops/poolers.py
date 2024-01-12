@@ -9,10 +9,9 @@ from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 from torch.nn.modules.utils import _pair
 import torchvision
-from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, _infer_scale
+from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, _filter_input, _infer_scale
 
 from mmrotate._C import roi_align_rotated_backward, roi_align_rotated_forward
-
 # Original implementation in detectron2.layers.roi_align_rotated
 class _ROIAlignRotated(Function):
     @staticmethod
@@ -124,7 +123,7 @@ def box_area(box: Tensor):
     """
     return box[:, 2] * box[:, 3]
 
-class LevelMapper:
+class RotatedLevelMapper:
     """Determine which FPN level each RoI in a set of RoIs should map to based
     on the heuristic in the FPN paper.
 
@@ -163,11 +162,10 @@ class LevelMapper:
         target_lvls = torch.clamp(target_lvls, min=self.k_min, max=self.k_max)
         return (target_lvls.to(torch.int64) - self.k_min).to(torch.int64)
 
-
 @torch.fx.wrap
 def _setup_scales(
     features: List[Tensor], image_shapes: List[Tuple[int, int]], canonical_scale: int, canonical_level: int
-) -> Tuple[List[float], LevelMapper]:
+) -> Tuple[List[float], RotatedLevelMapper]:
     if not image_shapes:
         raise ValueError("images list should not be empty")
     max_x = 0
@@ -183,24 +181,14 @@ def _setup_scales(
     lvl_min = -torch.log2(torch.tensor(scales[0], dtype=torch.float32)).item()
     lvl_max = -torch.log2(torch.tensor(scales[-1], dtype=torch.float32)).item()
 
-    map_levels = LevelMapper(
+    map_levels = RotatedLevelMapper(
         int(lvl_min),
         int(lvl_max),
         canonical_scale=canonical_scale,
         canonical_level=canonical_level,
+        eps=1e-6
     )
     return scales, map_levels
-
-
-@torch.fx.wrap
-def _filter_input(x: Dict[str, Tensor], featmap_names: List[str]) -> List[Tensor]:
-    x_filtered = []
-    for k, v in x.items():
-        if k in featmap_names:
-            x_filtered.append(v)
-    return x_filtered
-
-
 @torch.fx.wrap
 def _multiscale_rotated_roi_align(
     x_filtered: List[Tensor],
@@ -208,18 +196,18 @@ def _multiscale_rotated_roi_align(
     output_size: List[int],
     sampling_ratio: int,
     scales: Optional[List[float]],
-    mapper: Optional[LevelMapper],
+    mapper: Optional[RotatedLevelMapper],
 ) -> Tensor:
     """
     Args:
         x_filtered (List[Tensor]): List of input tensors.
         boxes (List[Tensor[N, 5]]): boxes to be used to perform the pooling operation, in
             (cx, cy, w, h, a) format and in the image reference size, not the feature map
-            reference. The coordinate must satisfy ``0 <= x1 < x2`` and ``0 <= y1 < y2``.
+            reference.
         output_size (Union[List[Tuple[int, int]], List[int]]): size of the output
         sampling_ratio (int): sampling ratio for ROIAlign
         scales (Optional[List[float]]): If None, scales will be automatically inferred. Default value is None.
-        mapper (Optional[LevelMapper]): If none, mapper will be automatically inferred. Default value is None.
+        mapper (Optional[RotatedLevelMapper]): If none, mapper will be automatically inferred. Default value is None.
     Returns:
         result (Tensor)
     """
@@ -300,8 +288,8 @@ class MultiScaleRotatedRoIAlign(nn.Module):
             for the pooling.
         output_size (List[Tuple[int, int]] or List[int]): output size for the pooled region
         sampling_ratio (int): sampling ratio for ROIAlign
-        canonical_scale (int, optional): canonical_scale for LevelMapper
-        canonical_level (int, optional): canonical_level for LevelMapper
+        canonical_scale (int, optional): canonical_scale for RotatedLevelMapper
+        canonical_level (int, optional): canonical_level for RotatedLevelMapper
 
     Examples::
 
@@ -322,7 +310,7 @@ class MultiScaleRotatedRoIAlign(nn.Module):
 
     """
 
-    __annotations__ = {"scales": Optional[List[float]], "map_levels": Optional[LevelMapper]}
+    __annotations__ = {"scales": Optional[List[float]], "map_levels": Optional[RotatedLevelMapper]}
 
     def __init__(
         self,

@@ -1,18 +1,19 @@
 import os
-from typing import Dict, Any, Iterable
+from typing import Dict, Any, Iterable, Tuple, Optional, Type
 
 import cv2
 import torch
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
 
+from datasets.base import BaseDataset
 from ops import boxes as box_ops
 
 FONT = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans-Bold.ttf')
 FONT = ImageFont.truetype(FONT, size=8)
 ANCHOR_TYPE = 'lt'
 
-def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data, o_score_threshold: float = 0.3):
+def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: Type[BaseDataset], o_score_threshold: float = 0.3, resize: Optional[Tuple[int, int]] = None):
     image = to_pil_image(image.detach().cpu())
     draw = ImageDraw.Draw(image)
 
@@ -53,6 +54,9 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
         draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
                   fill=color, font=FONT, anchor=ANCHOR_TYPE)
 
+    if resize is not None:
+        image = image.resize(resize)
+        
     return image, target["image_path"]
 
 

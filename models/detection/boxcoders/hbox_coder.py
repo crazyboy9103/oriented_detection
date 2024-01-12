@@ -10,6 +10,7 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     """
     Encode a set of proposals with respect to some
     reference boxes
+    
     ! IMPORTANT !
     This function presumes that the reference boxes are horizontal and the gt boxes are rotated.
 
@@ -43,11 +44,11 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     targets_dh = wh * torch.log(gt_heights / ex_heights)
     targets_da = wa * (gt_angles)
     
-    targets_dx.unsqueeze_(1)
-    targets_dy.unsqueeze_(1)
-    targets_dw.unsqueeze_(1)
-    targets_dh.unsqueeze_(1)
-    targets_da.unsqueeze_(1)
+    targets_dx = targets_dx.unsqueeze(1)
+    targets_dy = targets_dy.unsqueeze(1)
+    targets_dw = targets_dw.unsqueeze(1)
+    targets_dh = targets_dh.unsqueeze(1)
+    targets_da = targets_da.unsqueeze(1)
     targets = torch.cat((targets_dx, targets_dy, targets_dw, targets_dh, targets_da), dim=1)
     return targets
 

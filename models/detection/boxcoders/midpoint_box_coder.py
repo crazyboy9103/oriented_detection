@@ -63,12 +63,12 @@ def encode_midpoint_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) ->
     targets_da = wa * (gt_alpha - gt_ctr_x) / gt_widths # distance to mid point of top edge
     targets_db = wb * (gt_beta - gt_ctr_y) / gt_heights # distance to mid point of right edge
     
-    targets_dx.unsqueeze_(1)
-    targets_dy.unsqueeze_(1)
-    targets_dw.unsqueeze_(1)
-    targets_dh.unsqueeze_(1)
-    targets_da.unsqueeze_(1)
-    targets_db.unsqueeze_(1)
+    targets_dx = targets_dx.unsqueeze(1)
+    targets_dy = targets_dy.unsqueeze(1)
+    targets_dw = targets_dw.unsqueeze(1)
+    targets_dh = targets_dh.unsqueeze(1)
+    targets_da = targets_da.unsqueeze(1)
+    targets_db = targets_db.unsqueeze(1)
     targets = torch.cat([targets_dx, targets_dy, targets_dw, targets_dh, targets_da, targets_db], dim=1)
     return targets
 
@@ -111,20 +111,19 @@ def decode_midpoint_boxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, 
     _pred_a = pred_ctr_x - da * pred_w
     pred_b = pred_ctr_y + db * pred_h
     _pred_b = pred_ctr_y - db * pred_h
-    polys = torch.cat([pred_a, y1, x2, pred_b, _pred_a, y2, x1, _pred_b], dim=-1) # (N, 8)
-    center = torch.cat([pred_ctr_x, pred_ctr_y, pred_ctr_x, pred_ctr_y, pred_ctr_x, pred_ctr_y, pred_ctr_x, pred_ctr_y], dim=-1) # (N, 8)
+    
+    polys = torch.stack([pred_a, y1, x2, pred_b, _pred_a, y2, x1, _pred_b], dim=-1) 
+    center = torch.stack([pred_ctr_x, pred_ctr_y, pred_ctr_x, pred_ctr_y, pred_ctr_x, pred_ctr_y, pred_ctr_x, pred_ctr_y], dim=-1)
     center_polys = polys - center
     
     # shorter diagonal to match longer diagonal
-    diag_len = torch.sqrt(center_polys[:, 0::2] ** 2 + center_polys[:, 1::2] ** 2)
+    diag_len = torch.sqrt(center_polys[..., 0::2] ** 2 + center_polys[..., 1::2] ** 2)
     max_diag_len, _ = torch.max(diag_len, dim=-1, keepdim=True)
     diag_scale_factor = max_diag_len / diag_len
     center_polys = center_polys * diag_scale_factor.repeat_interleave(2, dim=-1)
     rectpolys = center_polys + center
     
     pred_boxes = box_ops.poly2obb(rectpolys)
-    
-    # pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes
 
 class XYWHAB_XYWHA_BoxCoder(BaseBoxCoder):
