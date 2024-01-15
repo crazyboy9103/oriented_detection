@@ -200,7 +200,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip_image_transform', type=str2bool, default=False)
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     # Logging arguments
-    parser.add_argument('--wandb', action='store_true', default=False)
+    parser.add_argument('--wandb', action='store_true', default=True)
 
     args = parser.parse_args()
     validate_args(args)

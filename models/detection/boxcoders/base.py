@@ -12,7 +12,7 @@ class BaseBoxCoder(metaclass=ABCMeta):
     Args:
         weights (List[float]): weights for box parameters used during encoding and decoding
     """
-    def __init__(self, weights: List[float] = (1.0, 1.0, 1.0, 1.0), bbox_xform_clip: float = math.log(1000.0 / 16)):
+    def __init__(self, weights: List[float] = (10.0, 10.0, 5.0, 5.0), bbox_xform_clip: float = math.log(1000.0 / 16)):
         self.weights = weights
         self.bbox_xform_clip = bbox_xform_clip
         

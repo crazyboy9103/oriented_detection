@@ -114,7 +114,7 @@ class XYXY_XYWH_BoxCoder(BaseBoxCoder):
             weights (4-element tuple) : Scaling factors used to scale (dx, dy, dw, dh) deltas
             bbox_xform_clip (float)
         """
-        super(XYXY_XYWH_BoxCoder, self).__init__(weights)
+        super(XYXY_XYWH_BoxCoder, self).__init__(weights, bbox_xform_clip)
 
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         targets = encode_boxes(gt_bboxes, bboxes, weights)

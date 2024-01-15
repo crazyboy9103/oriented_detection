@@ -61,11 +61,11 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor, proj_xy: b
     return targets
 
 def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float, proj_xy: bool = True) -> Tensor:
-    ctr_x = bboxes[:, 0]
-    ctr_y = bboxes[:, 1]
-    widths = bboxes[:, 2]
-    heights = bboxes[:, 3]
-    angles = bboxes[:, 4]
+    ctr_x = bboxes[:, 0][:, None]
+    ctr_y = bboxes[:, 1][:, None]
+    widths = bboxes[:, 2][:, None]
+    heights = bboxes[:, 3][:, None]
+    angles = bboxes[:, 4][:, None]
     
     wx, wy, ww, wh, wa = weights
     dx = pred_bboxes[:, 0::5] / wx
@@ -78,15 +78,15 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     dh = torch.clamp(dh, max=bbox_xform_clip)
     
     if proj_xy:
-        pred_ctr_x = dx * widths[:, None] * torch.cos(angles[:, None]) - dy * heights[:, None] * torch.sin(angles[:, None]) + ctr_x[:, None]
-        pred_ctr_y = dx * widths[:, None] * torch.sin(angles[:, None]) + dy * heights[:, None] * torch.cos(angles[:, None]) + ctr_y[:, None] 
+        pred_ctr_x = dx * widths * torch.cos(angles) - dy * heights * torch.sin(angles) + ctr_x
+        pred_ctr_y = dx * widths * torch.sin(angles) + dy * heights * torch.cos(angles) + ctr_y 
     else:
-        pred_ctr_x = dx * widths[:, None] + ctr_x[:, None]
-        pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
+        pred_ctr_x = dx * widths + ctr_x
+        pred_ctr_y = dy * heights + ctr_y
         
-    pred_w = torch.exp(dw) * widths[:, None]
-    pred_h = torch.exp(dh) * heights[:, None]
-    pred_a = angles[:, None] + da
+    pred_w = torch.exp(dw) * widths
+    pred_h = torch.exp(dh) * heights
+    pred_a = angles + da
     pred_a = (pred_a + torch.pi) % (2 * torch.pi) - torch.pi
     
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
