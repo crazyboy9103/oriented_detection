@@ -2,7 +2,7 @@
 #pragma once
 #include <torch/types.h>
 
-namespace mmrotate {
+namespace detectron2 {
 
 at::Tensor ROIAlignRotated_forward_cpu(
     const at::Tensor& input,
@@ -112,4 +112,4 @@ inline at::Tensor ROIAlignRotated_backward(
       sampling_ratio);
 }
 
-} // namespace mmrotate
+} // namespace detectron2

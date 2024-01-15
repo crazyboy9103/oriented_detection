@@ -16,7 +16,7 @@
 // works, if any, using the "legacy" ROIAlignRotated Op.
 // This would make the interface a bit cleaner.
 
-namespace mmrotate {
+namespace detectron2 {
 
 namespace {
 
@@ -171,10 +171,7 @@ __global__ void RoIAlignRotatedForward(
     T roi_center_h = current_roi[2] * spatial_scale - offset;
     T roi_width = current_roi[3] * spatial_scale;
     T roi_height = current_roi[4] * spatial_scale;
-    // T theta = current_roi[5] * M_PI / 180.0;
-    T theta = current_roi[5];
-    theta = -theta;  // Since clockwise, the angle needs to be reversed.
-    
+    T theta = current_roi[5] * M_PI / 180.0;
     T cos_theta = cos(theta);
     T sin_theta = sin(theta);
 
@@ -256,10 +253,7 @@ __global__ void RoIAlignRotatedBackwardFeature(
     T roi_center_h = current_roi[2] * spatial_scale - offset;
     T roi_width = current_roi[3] * spatial_scale;
     T roi_height = current_roi[4] * spatial_scale;
-    // T theta = current_roi[5] * M_PI / 180.0;
-    T theta = current_roi[5];
-    theta = -theta;  // Since clockwise, the angle needs to be reversed.
-    
+    T theta = current_roi[5] * M_PI / 180.0;
     T cos_theta = cos(theta);
     T sin_theta = sin(theta);
 
@@ -446,4 +440,4 @@ at::Tensor ROIAlignRotated_backward_cuda(
   return grad_input;
 }
 
-} // namespace mmrotate
+} // namespace detectron2

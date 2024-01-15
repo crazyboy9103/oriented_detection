@@ -1,6 +1,4 @@
 import argparse
-import os
-import shutil
 
 import torch
 import pytorch_lightning as pl
@@ -45,7 +43,7 @@ def main(args):
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
             "./datasets/mvtec_balanced.pth", 
-            "/datasets/split_ss_mvtec_balanced", 
+            "/datasets/mvtec", 
             train_loader_kwargs, 
             test_loader_kwargs
         )
@@ -183,7 +181,7 @@ if __name__ == '__main__':
     # Model arguments
     parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
-    parser.add_argument('--backbone_type', type=str, default="mobilenetv3large", 
+    parser.add_argument('--backbone_type', type=str, default="resnet50", 
                         choices=["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"])
     parser.add_argument('--pretrained', type=str2bool, default=False)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
@@ -193,16 +191,16 @@ if __name__ == '__main__':
     # Training arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--num_workers', type=int, default=2)
+    parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--num_epochs', type=int, default=12)
-    parser.add_argument('--dataset', type=str, default='jmc', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
+    parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--skip_flip', type=str2bool, default=False)
     parser.add_argument('--skip_image_transform', type=str2bool, default=False)
     parser.add_argument('--learning_rate', type=float, default=0.0001)
     # Logging arguments
-    parser.add_argument('--wandb', action='store_true', default=True)
+    parser.add_argument('--wandb', action='store_true', default=False)
 
     args = parser.parse_args()
     validate_args(args)

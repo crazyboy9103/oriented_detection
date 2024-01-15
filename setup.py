@@ -51,10 +51,10 @@ def get_extensions():
 
     include_dirs = [extensions_dir]
 
-    os.makedirs("./mmrotate", exist_ok=True)
+    os.makedirs("./detectron2", exist_ok=True)
     ext_modules = [
         extension(
-            "mmrotate._C",
+            "detectron2._C",
             sources,
             include_dirs=include_dirs,
             define_macros=define_macros,
@@ -65,11 +65,11 @@ def get_extensions():
     return ext_modules
 
 setup(
-    name="mmrotate",
+    name="detectron2",
     version="1.0.0",
-    author="FAIR & OpenMMLab",
+    author="FAIR",
     url="",
-    description="Detectron2 + mmrotate csrc extension",
+    description="Detectron2 csrc extension",
     python_requires=">=3.7",
     install_requires=[],
     ext_modules=get_extensions(),

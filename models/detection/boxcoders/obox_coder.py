@@ -48,7 +48,9 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor, proj_xy: b
     
     targets_dw = ww * torch.log(gt_widths / ex_widths)
     targets_dh = wh * torch.log(gt_heights / ex_heights)
-    targets_da = wa * (gt_angles - ex_angles)
+    da = (gt_angles - ex_angles)
+    da = (da + torch.pi) % (2 * torch.pi) - torch.pi
+    targets_da = wa * da
     
     targets_dx = targets_dx.unsqueeze(1)
     targets_dy = targets_dy.unsqueeze(1)
@@ -85,6 +87,7 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_w = torch.exp(dw) * widths[:, None]
     pred_h = torch.exp(dh) * heights[:, None]
     pred_a = angles[:, None] + da
+    pred_a = (pred_a + torch.pi) % (2 * torch.pi) - torch.pi
     
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes

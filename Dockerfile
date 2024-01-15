@@ -3,9 +3,7 @@ ARG CUDA_VERSION=11.8
 # To use nvcc, devel image must be used
 FROM pytorch/pytorch:${TORCH_VERSION}-cuda${CUDA_VERSION}-cudnn8-devel
 
-# ARG DEBIAN_FRONTEND=noninteractive
-# ENV TZ=Asia/Seoul
-RUN apt update && apt upgrade -y && apt install git  
+RUN apt update && apt upgrade -y && apt install -y git  
 WORKDIR /workspace
 COPY . /workspace
 

@@ -11,7 +11,7 @@ from torch.nn.modules.utils import _pair
 import torchvision
 from torchvision.ops.poolers import _onnx_merge_levels, _convert_to_roi_format, _filter_input, _infer_scale
 
-from mmrotate._C import roi_align_rotated_backward, roi_align_rotated_forward
+from detectron2._C import roi_align_rotated_backward, roi_align_rotated_forward
 # Original implementation in detectron2.layers.roi_align_rotated
 class _ROIAlignRotated(Function):
     @staticmethod
@@ -97,9 +97,6 @@ def rotated_roi_align(
             then exactly ``sampling_ratio x sampling_ratio`` sampling points per bin are used. If
             <= 0, then an adaptive number of grid points are used (computed as
             ``ceil(roi_width / output_width)``, and likewise for height). Default: -1
-        aligned (bool): If False, use the legacy implementation.
-            If True, pixel shift the box coordinates it by -0.5 for a better alignment with the two
-            neighboring pixel indices. This version is used in Detectron2
 
     Returns:
         Tensor[K, C, output_size[0], output_size[1]]: The pooled RoIs.

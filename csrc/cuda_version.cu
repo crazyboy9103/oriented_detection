@@ -2,11 +2,11 @@
 
 #include <cuda_runtime_api.h>
 
-namespace mmrotate {
+namespace detectron2 {
 int get_cudart_version() {
 // Not a ROCM platform: Either HIP is not used, or
 // it is used, but platform is not ROCM (i.e. it is CUDA)
-#if !defined(__HIP_PLATFORM_HCC__)
+#if !defined(__HIP_PLATFORM_AMD__)
   return CUDART_VERSION;
 #else
   int version = 0;
@@ -23,4 +23,4 @@ int get_cudart_version() {
   return version;
 #endif
 }
-} // namespace mmrotate
+} // namespace detectron2

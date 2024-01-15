@@ -75,7 +75,6 @@ class BaseDataset(Dataset):
         ann_files = glob.glob(ann_folder + '/*.txt')
         # Use images with annotations
         img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".png") for ann_file in ann_files]
-        
         # For det_demo
         if not os.path.isfile(img_files[0]):
             img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".jpg") for ann_file in ann_files]
@@ -89,7 +88,7 @@ class BaseDataset(Dataset):
             gt_bboxes = []
             # gt_areas = []
 
-            gt_obboxes = []
+            gt_oboxes = []
             # gt_oareas = []
             
             gt_labels = []
@@ -109,12 +108,12 @@ class BaseDataset(Dataset):
                         hbb = box_ops.poly2hbb_np(poly)
                         assert hbb[2] > hbb[0] and hbb[3] > hbb[1], "hbb must be valid"
                         
-                        if not obb:
+                        if len(obb) == 0:
                             # Weird error in DOTA dataset, skip this instance
                             print("[DATA]", obb, hbb)
                             continue
-                    except:
-                        continue
+                    except Exception as e:
+                        raise e
                     
                     difficulty = int(bbox_info[9])
                     cls_name = bbox_info[8]
@@ -122,7 +121,7 @@ class BaseDataset(Dataset):
 
                     gt_difficulty.append(difficulty)
                     gt_bboxes.append(hbb)
-                    gt_obboxes.append(obb)
+                    gt_oboxes.append(obb)
                     gt_labels.append(label)
                     gt_polygons.append(poly)
                     
@@ -140,7 +139,7 @@ class BaseDataset(Dataset):
                 ann['bboxes'] = torch.tensor(np.array(gt_bboxes), dtype=torch.float32)
                 # ann['area'] = torch.tensor(np.array(gt_areas), dtype=torch.float32)
                 
-                ann['oboxes'] = torch.tensor(np.array(gt_obboxes), dtype=torch.float32)
+                ann['oboxes'] = torch.tensor(np.array(gt_oboxes), dtype=torch.float32)
                 # ann['oarea'] = torch.tensor(np.array(gt_oareas), dtype=torch.float32)
                 
                 ann['labels'] = torch.tensor(np.array(gt_labels), dtype=torch.int64)

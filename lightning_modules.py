@@ -53,10 +53,11 @@ class ModelWrapper(LightningModule):
         # self.neurocle_detection_evaluator = NeurocleDetectionEvaluator(0.5, 0.5)
     
     def setup(self, stage: Optional[str] = None):
-        self.logger.experiment.config.update(self.train_config)
-        self.logger.experiment.config.update(self.model_config)
-        self.logger.experiment.config.update(self.kwargs)
-        
+        if hasattr(self.logger.experiment, "config"):
+            self.logger.experiment.config.update(self.train_config)
+            self.logger.experiment.config.update(self.model_config)
+            self.logger.experiment.config.update(self.kwargs)
+            
     def forward(self, images, targets=None):
         return self.model(images, targets)
 
@@ -67,10 +68,10 @@ class ModelWrapper(LightningModule):
         loss_dict = self(images, targets)
         
         loss = sum(loss for loss in loss_dict.values())
-
         for k, v in loss_dict.items():
             self.log(f'train-{k}', v.item())
         self.log('train-loss', loss.item())
+        print("loss", loss.item())
         # if batch_idx % 10 == 0:
         #     torch.cuda.empty_cache()
         #     gc.collect()

@@ -2,14 +2,14 @@
 wandb/
 # compile
 build/
-mmrotate.egg-info/ 
+detectron2.egg-info/ 
 __pycache__/
 # local
 .vscode/
 .ipynb_checkpoints/
 .python-version
 # misc
-notebooks/
+# notebooks/
 checkpoints/
 
 *.pt

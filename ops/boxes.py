@@ -17,7 +17,7 @@ from ops._box_convert import (
     obb2xyxy,
     hbb2obb,
 )
-from mmrotate._C import (
+from detectron2._C import (
     nms_rotated as _C_nms_rotated,
     box_iou_rotated as _C_box_iou_rotated,
 )
@@ -39,7 +39,7 @@ def remove_small_rotated_boxes(oboxes: Tensor, min_size: float) -> Tensor:
     keep = torch.where(keep)[0]
     return keep
 
-def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, mode_flag: Literal[0, 1] = 0, aligned: bool = False) -> Tensor:
+def box_iou_rotated(boxes1: Tensor, boxes2: Tensor) -> Tensor:
     """ Rotated box IoU. mode_flag and aligned are kept for compatibility with mmrotate implementation.
     Args:
         boxes1, boxes2 (Tensor[N, 5]): boxes in ``(cx, cy, w, h, a)`` format
@@ -49,16 +49,61 @@ def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, mode_flag: Literal[0, 1] = 0
     Returns:
         Tensor[N, N]: the NxN matrix containing the pairwise IoU values for every element in boxes1 and boxes2
     """
-    return _C_box_iou_rotated(boxes1, boxes2, mode_flag, aligned)
+    return _C_box_iou_rotated(boxes1, boxes2)
 
-def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float, multi_label: bool = False):
+# Note: this function (nms_rotated) might be moved into
+# torchvision/ops/boxes.py in the future
+def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float):
     """
     Performs non-maximum suppression (NMS) on the rotated boxes according
     to their intersection-over-union (IoU).
 
     Rotated NMS iteratively removes lower scoring rotated boxes which have an
     IoU greater than iou_threshold with another (higher scoring) rotated box.
-    
+
+    Note that RotatedBox (5, 3, 4, 2, -90) covers exactly the same region as
+    RotatedBox (5, 3, 4, 2, 90) does, and their IoU will be 1. However, they
+    can be representing completely different objects in certain tasks, e.g., OCR.
+
+    As for the question of whether rotated-NMS should treat them as faraway boxes
+    even though their IOU is 1, it depends on the application and/or ground truth annotation.
+
+    As an extreme example, consider a single character v and the square box around it.
+
+    If the angle is 0 degree, the object (text) would be read as 'v';
+
+    If the angle is 90 degrees, the object (text) would become '>';
+
+    If the angle is 180 degrees, the object (text) would become '^';
+
+    If the angle is 270/-90 degrees, the object (text) would become '<'
+
+    All of these cases have IoU of 1 to each other, and rotated NMS that only
+    uses IoU as criterion would only keep one of them with the highest score -
+    which, practically, still makes sense in most cases because typically
+    only one of theses orientations is the correct one. Also, it does not matter
+    as much if the box is only used to classify the object (instead of transcribing
+    them with a sequential OCR recognition model) later.
+
+    On the other hand, when we use IoU to filter proposals that are close to the
+    ground truth during training, we should definitely take the angle into account if
+    we know the ground truth is labeled with the strictly correct orientation (as in,
+    upside-down words are annotated with -180 degrees even though they can be covered
+    with a 0/90/-90 degree box, etc.)
+
+    The way the original dataset is annotated also matters. For example, if the dataset
+    is a 4-point polygon dataset that does not enforce ordering of vertices/orientation,
+    we can estimate a minimum rotated bounding box to this polygon, but there's no way
+    we can tell the correct angle with 100% confidence (as shown above, there could be 4 different
+    rotated boxes, with angles differed by 90 degrees to each other, covering the exactly
+    same region). In that case we have to just use IoU to determine the box
+    proximity (as many detection benchmarks (even for text) do) unless there're other
+    assumptions we can make (like width is always larger than height, or the object is not
+    rotated by more than 90 degrees CCW/CW, etc.)
+
+    In summary, not considering angles in rotated NMS seems to be a good option for now,
+    but we should be aware of its implications.
+
     Args:
         boxes (Tensor[N, 5]): Rotated boxes to perform NMS on. They are expected to be in
            (x_center, y_center, width, height, angle_degrees) format.
@@ -69,11 +114,9 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float,
         keep (Tensor): int64 tensor with the indices of the elements that have been kept
         by Rotated NMS, sorted in decreasing order of scores
     """
-    if boxes.shape[0] == 0:
-        return None
-       
-    return _C_nms_rotated(boxes, scores, iou_threshold, multi_label)
+    return _C_nms_rotated(boxes, scores, iou_threshold)
 
+@torch.jit.script_if_tracing
 def batched_nms_rotated(
     boxes: torch.Tensor, scores: torch.Tensor, idxs: torch.Tensor, iou_threshold: float
 ):
@@ -86,7 +129,7 @@ def batched_nms_rotated(
     Args:
         boxes (Tensor[N, 5]):
            boxes where NMS will be performed. They
-           are expected to be in (x_ctr, y_ctr, width, height, angle_radians) format
+           are expected to be in (x_ctr, y_ctr, width, height, angle_degrees) format
         scores (Tensor[N]):
            scores for each one of the boxes
         idxs (Tensor[N]):

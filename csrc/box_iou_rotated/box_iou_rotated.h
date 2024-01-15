@@ -2,32 +2,34 @@
 #pragma once
 #include <torch/types.h>
 
-namespace mmrotate {
-  at::Tensor box_iou_rotated_cpu(
+namespace detectron2 {
+
+at::Tensor box_iou_rotated_cpu(
     const at::Tensor& boxes1,
-    const at::Tensor& boxes2,
-    const int mode_flag,
-    const bool aligned
-    );
+    const at::Tensor& boxes2);
 
-  at::Tensor box_iou_rotated_cuda(
-      const at::Tensor& boxes1,
-      const at::Tensor& boxes2,
-      const int mode_flag, 
-      const bool aligned
-    );
+#if defined(WITH_CUDA) || defined(WITH_HIP)
+at::Tensor box_iou_rotated_cuda(
+    const at::Tensor& boxes1,
+    const at::Tensor& boxes2);
+#endif
 
-  // Interface for Python
-  inline at::Tensor box_iou_rotated(
-      const at::Tensor& boxes1,
-      const at::Tensor& boxes2,
-      const int mode_flag, 
-      const bool aligned
-    ) {
-    TORCH_INTERNAL_ASSERT(boxes1.device() == boxes2.device(), "boxes1 and boxes2 must be on same device (GPU | CPU)");
-    if (boxes1.device().is_cuda()) {
-      return box_iou_rotated_cuda(boxes1.contiguous(), boxes2.contiguous(), mode_flag, aligned);
-    }
-    return box_iou_rotated_cpu(boxes1.contiguous(), boxes2.contiguous(), mode_flag, aligned);
+// Interface for Python
+// inline is needed to prevent multiple function definitions when this header is
+// included by different cpps
+inline at::Tensor box_iou_rotated(
+    const at::Tensor& boxes1,
+    const at::Tensor& boxes2) {
+  assert(boxes1.device().is_cuda() == boxes2.device().is_cuda());
+  if (boxes1.device().is_cuda()) {
+#if defined(WITH_CUDA) || defined(WITH_HIP)
+    return box_iou_rotated_cuda(boxes1.contiguous(), boxes2.contiguous());
+#else
+    AT_ERROR("Detectron2 is not compiled with GPU support!");
+#endif
   }
-} // namespace mmrotate
+
+  return box_iou_rotated_cpu(boxes1.contiguous(), boxes2.contiguous());
+}
+
+} // namespace detectron2

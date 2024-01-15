@@ -49,18 +49,18 @@ pip install -r requirements.txt
 
 ## Compile csrc
 
-The `csrc` folder contains custom C++/CUDA source files that need to be compiled. This creates a directory called `mmrotate`, which contains the compiled library.
+The `csrc` folder contains custom C++/CUDA source files that need to be compiled. This creates a directory called `detectron2`, which contains the compiled library.
 ```
 pip install -e .
 ```
 
 ### Import Library
 
-Make sure to import PyTorch before using functions from `mmrotate`. Note that this mmrotate is pointing to the `mmrotate` directory created in the compile step.
+Make sure to import PyTorch before using functions from `detectron2`. Note that this detectron2 is pointing to the `detectron2` directory created in the compile step.
 
 ```python
 import torch
-from mmrotate._C import (
+from detectron2._C import (
     get_compiler_version,
     get_cuda_version,
     has_cuda,
@@ -141,4 +141,4 @@ python entrypoint.py \
 This project integrates code from the following two different projects:
 
 1. torchvision is licensed under the BSD 3-Clause License. [Link to full license](https://github.com/pytorch/vision/blob/main/LICENSE)
-2. mmrotate is licensed under the Apache License 2.0. [Link to full license](https://github.com/open-mmlab/mmrotate/blob/main/LICENSE)
+2. detectron2 is licensed under the Apache License 2.0. [Link to full license](https://github.com/facebookresearch/detectron2/blob/main/LICENSE)

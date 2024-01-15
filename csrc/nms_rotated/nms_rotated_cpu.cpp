@@ -1,8 +1,8 @@
 // Copyright (c) Facebook, Inc. and its affiliates.
-#include "../box_iou_rotated/box_iou_rotated_utils.hpp"
+#include "../box_iou_rotated/box_iou_rotated_utils.h"
 #include "nms_rotated.h"
 
-namespace mmrotate {
+namespace detectron2 {
 
 template <typename scalar_t>
 at::Tensor nms_rotated_cpu_kernel(
@@ -50,9 +50,7 @@ at::Tensor nms_rotated_cpu_kernel(
       }
 
       auto ovr = single_box_iou_rotated<scalar_t>(
-          dets[i].data_ptr<scalar_t>(), 
-          dets[j].data_ptr<scalar_t>(),
-          0);
+          dets[i].data_ptr<scalar_t>(), dets[j].data_ptr<scalar_t>());
       if (ovr >= iou_threshold) {
         suppressed[j] = 1;
       }
@@ -74,4 +72,4 @@ at::Tensor nms_rotated_cpu(
   return result;
 }
 
-} // namespace mmrotate
+} // namespace detectron2
