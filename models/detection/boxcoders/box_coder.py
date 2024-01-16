@@ -1,7 +1,4 @@
 # Essentially equivalent to torchvision BoxCoder
-from typing import Tuple
-import math
-
 import torch
 from torch import Tensor
 
@@ -105,17 +102,6 @@ class XYXY_XYWH_BoxCoder(BaseBoxCoder):
     Args:
         weights (Tuple[float, float, float, float]): weights for (dx, dy, dw, dh)
     """
-
-    def __init__(
-        self, weights: Tuple[float, float, float, float], bbox_xform_clip: float = math.log(1000.0 / 16)
-    ) -> None:
-        """
-        Args:
-            weights (4-element tuple) : Scaling factors used to scale (dx, dy, dw, dh) deltas
-            bbox_xform_clip (float)
-        """
-        super(XYXY_XYWH_BoxCoder, self).__init__(weights, bbox_xform_clip)
-
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         targets = encode_boxes(gt_bboxes, bboxes, weights)
         return targets

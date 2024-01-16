@@ -39,10 +39,9 @@ from torchvision.models.efficientnet import (
     EfficientNet_B3_Weights,
 )
 
-from .roi_heads import RotatedFasterRCNNRoIHead, OrientedRCNNRoIHead
-from .rpn import RPNHead, RegionProposalNetwork, OrientedRegionProposalNetwork
+from .roi_heads import RotatedFasterRCNNRoIHead
+from .rpn import RPNHead, RegionProposalNetwork
 from .transform import GeneralizedRCNNTransform
-from ops.poolers import MultiScaleRotatedRoIAlign
 
 def _efficientnet_extractor(
     backbone: EfficientNet,
@@ -323,7 +322,7 @@ def model_builder(
     model: Optional[nn.Module] = None,
     freeze_bn: bool = True,
     backbone_type: str = "mobilenetv3large",
-    roi_pooler: MultiScaleRotatedRoIAlign|MultiScaleRoIAlign = MultiScaleRoIAlign,
+    roi_pooler = MultiScaleRoIAlign,
     **kwargs
 ):
     weights = None
@@ -463,21 +462,12 @@ def model_builder(
     return model
 
 FasterRCNN_RPNHead = partial(RPNHead, bbox_dim=4)
-OrientedRCNN_RPNHead = partial(RPNHead, bbox_dim=6)
 
 RotatedFasterRCNN = partial(RotatedRCNNWrapper, 
                             rpn_head=FasterRCNN_RPNHead,
                             rpn=RegionProposalNetwork, 
                             roi_head=RotatedFasterRCNNRoIHead)
 
-OrientedRCNN = partial(RotatedRCNNWrapper, 
-                            rpn_head=OrientedRCNN_RPNHead,
-                            rpn=OrientedRegionProposalNetwork, 
-                            roi_head=OrientedRCNNRoIHead)
-
 faster_rcnn_builder = partial(model_builder, 
                               model=RotatedFasterRCNN, 
                               roi_pooler=MultiScaleRoIAlign)
-oriented_rcnn_builder = partial(model_builder,
-                                model=OrientedRCNN, 
-                                roi_pooler=MultiScaleRotatedRoIAlign)

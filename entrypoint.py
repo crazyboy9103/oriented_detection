@@ -6,7 +6,7 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 from configs import TrainConfig, ModelConfig, Kwargs
-from lightning_modules import RotatedFasterRCNN, OrientedRCNN
+from lightning_modules import RotatedFasterRCNN
 from datasets.detdemo import DetDemoDataModule, DetDemoDataset
 from datasets.mvtec import MVTecDataModule, MVTecDataset
 from datasets.dota import DotaDataModule, DotaDataset
@@ -116,16 +116,8 @@ def main(args):
         _skip_flip = args.skip_flip,
         _skip_image_transform = args.skip_image_transform,
     )
-    if args.model_type == 'rotated':
-        detector = RotatedFasterRCNN
-        
-    elif args.model_type == 'oriented':
-        detector = OrientedRCNN
-        
-    else:
-        raise ValueError("Invalid model type!")
     
-    model = detector(
+    model = RotatedFasterRCNN(
         train_config=train_config,
         model_config=model_config,
         kwargs=kwargs,
@@ -172,16 +164,12 @@ def validate_args(args):
     if args.dataset == "dota" and args.image_size not in (256, 512, 800):
         raise ValueError("Invalid image size for DOTA dataset")
     
-    # TODO support other precision for oriented r-cnn
-    if args.model_type == "oriented" and "32" not in args.precision:
-        raise ValueError("Oriented R-CNN only supports 32-bit precision")
-    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
     # Model arguments
-    parser.add_argument('--model_type', type=str, default='oriented', choices=['rotated', 'oriented'],
+    parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
-    parser.add_argument('--backbone_type', type=str, default="resnet50", 
+    parser.add_argument('--backbone_type', type=str, default="efficientnet_b0", 
                         choices=["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"])
     parser.add_argument('--pretrained', type=str2bool, default=False)
     parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
@@ -190,11 +178,11 @@ if __name__ == '__main__':
     
     # Training arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=4)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
-    parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--precision', type=str, default='16-mixed', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--skip_flip', type=str2bool, default=True)
     parser.add_argument('--skip_image_transform', type=str2bool, default=True)

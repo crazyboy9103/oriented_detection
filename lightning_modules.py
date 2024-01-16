@@ -9,7 +9,7 @@ import wandb
 
 from configs import TrainConfig, ModelConfig, Kwargs
 from datasets.base import BaseDataset
-from models.detection.builder import faster_rcnn_builder, oriented_rcnn_builder
+from models.detection.builder import faster_rcnn_builder
 from scheduler import LinearWarmUpMultiStepDecay
 from evaluation.neurocle_evaluator import DetectionEvaluator, NeurocleDetectionEvaluator
 from visualize_utils import plot_image
@@ -151,15 +151,3 @@ class RotatedFasterRCNN(ModelWrapper):
     ):
         super(RotatedFasterRCNN, self).__init__(train_config, model_config, kwargs, dataset)
         self.model = faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
-
-class OrientedRCNN(ModelWrapper):
-    def __init__(
-        self, 
-        train_config, 
-        model_config,
-        kwargs,
-        dataset,
-    ):
-        super(OrientedRCNN, self).__init__(train_config, model_config, kwargs, dataset)
-        self.model = oriented_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
-    

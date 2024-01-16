@@ -1,6 +1,3 @@
-from typing import Tuple
-import math
-
 import torch
 from torch import Tensor
 
@@ -73,25 +70,12 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
     pred_w = torch.exp(dw) * widths[:, None]
     pred_h = torch.exp(dh) * heights[:, None]
-    # pred_a = (da + torch.pi) % (2 * torch.pi) - torch.pi 
+    pred_a = (da + torch.pi) % (2 * torch.pi) - torch.pi 
     
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes
 
 class XYXY_XYWHA_BoxCoder(BaseBoxCoder):
-    def __init__(self, weights: Tuple[float, float, float, float, float], bbox_xform_clip: float = math.log(1000.0 / 16)):
-        """
-        Encodes bbox (x1, y1, x2, y2) into delta (dx, dy, dw, dh, da), and
-        decodes delta (dx, dy, dw, dh, da) back to obox (cx, cy, w, h, a).
-        
-        Example: uses horizontal proposals (x1, y1, x2, y2) to encode
-        rotated ground-truth boxes (cx, cy, w, h, a) into delta (dx, dy, dw, dh, da).
-        
-        Args:
-            weights (Tuple[float, float, float, float, float]): weights for (dx, dy, dw, dh, da)
-        """
-        super(XYXY_XYWHA_BoxCoder, self).__init__(weights, bbox_xform_clip)
-
     def encode_single(self, gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
         assert gt_bboxes.size(0) == bboxes.size(0)
         assert gt_bboxes.size(-1) == 5

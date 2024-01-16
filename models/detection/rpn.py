@@ -10,7 +10,7 @@ from torchvision.models.detection.anchor_utils import AnchorGenerator
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import XYXY_XYWH_BoxCoder, XYWHAB_XYWHA_BoxCoder
+from models.detection.boxcoders import XYXY_XYWH_BoxCoder
 
 # RPN Heads
 class RPNHead(nn.Module):
@@ -135,7 +135,7 @@ class RegionProposalNetwork(nn.Module):
         super().__init__()
         self.anchor_generator = anchor_generator
         self.head = head
-        self.box_coder = XYXY_XYWH_BoxCoder(weights=(1.0, 1.0, 1.0, 1.0))
+        self.box_coder = XYXY_XYWH_BoxCoder(weights=(10.0, 10.0, 5.0, 5.0))
 
         # used during training
         self.box_similarity = box_ops.box_iou
@@ -259,14 +259,10 @@ class RegionProposalNetwork(nn.Module):
         final_boxes = []
         final_scores = []
         for boxes, scores, lvl, img_shape in zip(proposals, objectness_prob, levels, image_shapes):
-            if self.regression_dim == 4:
-                boxes = box_ops.clip_boxes_to_image(boxes, img_shape)
+            boxes = box_ops.clip_boxes_to_image(boxes, img_shape)
         
             # remove small boxes
-            if self.regression_dim == 4:
-                keep = box_ops.remove_small_boxes(boxes, self.min_size)
-            elif self.regression_dim == 6:
-                keep = box_ops.remove_small_rotated_boxes(boxes, self.min_size)
+            keep = box_ops.remove_small_boxes(boxes, self.min_size)
             
             boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
 
@@ -276,11 +272,8 @@ class RegionProposalNetwork(nn.Module):
             boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
 
             # non-maximum suppression, independently done per level
-            if self.regression_dim == 4:
-                keep = box_ops.batched_nms(boxes, scores, lvl, self.nms_thresh)
-            elif self.regression_dim == 6:
-                keep = box_ops.batched_nms_rotated(boxes, scores, lvl, self.nms_thresh)
-                
+            keep = box_ops.batched_nms(boxes, scores, lvl, self.nms_thresh)
+          
             # keep only topk scoring predictions
             keep = keep[: self.post_nms_top_n()]
             boxes, scores = boxes[keep], scores[keep]
@@ -385,58 +378,3 @@ class RegionProposalNetwork(nn.Module):
         ) / (sampled_inds.numel())
         
         return objectness_loss, box_loss
-
-
-class OrientedRegionProposalNetwork(RegionProposalNetwork):
-    """
-    Implements Oriented Region Proposal Network (ORPN).
-
-    Args:
-        anchor_generator (AnchorGenerator): module that generates the anchors for a set of feature
-            maps.
-        head (nn.Module): module that computes the objectness and regression deltas
-        fg_iou_thresh (float): minimum IoU between the anchor and the GT box so that they can be
-            considered as positive during training of the RPN.
-        bg_iou_thresh (float): maximum IoU between the anchor and the GT box so that they can be
-            considered as negative during training of the RPN.
-        batch_size_per_image (int): number of anchors that are sampled during training of the RPN
-            for computing the loss
-        positive_fraction (float): proportion of positive anchors in a mini-batch during training
-            of the RPN
-        pre_nms_top_n (Dict[str, int]): number of proposals to keep before applying NMS. It should
-            contain two fields: training and testing, to allow for different values depending
-            on training or evaluation
-        post_nms_top_n (Dict[str, int]): number of proposals to keep after applying NMS. It should
-            contain two fields: training and testing, to allow for different values depending
-            on training or evaluation
-        nms_thresh (float): NMS threshold used for postprocessing the RPN proposals
-
-    """
-
-    __annotations__ = {
-        "box_coder": XYWHAB_XYWHA_BoxCoder,
-        "proposal_matcher": det_utils.Matcher,
-        "fg_bg_sampler": det_utils.BalancedPositiveNegativeSampler,
-    }
-
-    def __init__(
-        self,
-        anchor_generator: AnchorGenerator,
-        head: nn.Module,
-        # Faster-RCNN Training
-        fg_iou_thresh: float,
-        bg_iou_thresh: float,
-        batch_size_per_image: int,
-        positive_fraction: float,
-        # Faster-RCNN Inference
-        pre_nms_top_n: Dict[str, int],
-        post_nms_top_n: Dict[str, int],
-        nms_thresh: float,
-        score_thresh: float = 0.0,
-    ) -> None:
-        super(OrientedRegionProposalNetwork, self).__init__(anchor_generator, head, fg_iou_thresh, bg_iou_thresh, batch_size_per_image, positive_fraction, pre_nms_top_n, post_nms_top_n, nms_thresh, score_thresh)
-        self.box_coder = XYWHAB_XYWHA_BoxCoder(weights=(1.0, 1.0, 1.0, 1.0, 1.0, 1.0))
-        # used during training
-        self.box_similarity = box_ops.box_iou_rotated
-        self.regression_dim = 6 # regressed as (x, y, w, h, alpha, beta)
-        self.proposal_dim = 5 # predicted as (x, y, w, h, angle)

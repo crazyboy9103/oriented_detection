@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import XYXY_XYWHA_BoxCoder, XYWHA_XYWHA_BoxCoder
+from models.detection.boxcoders import XYXY_XYWHA_BoxCoder
 from models.detection.losses import oriented_rcnn_loss
 
 class RoIHeads(nn.Module):
@@ -323,47 +323,6 @@ class RoIHeads(nn.Module):
         }
 
         return result, losses
-    
-class OrientedRCNNRoIHead(RoIHeads):
-    def __init__(
-        self,
-        box_roi_pool,
-        box_head,
-        box_predictor,
-        # Rotated Faster R-CNN training
-        fg_iou_thresh,
-        bg_iou_thresh,
-        batch_size_per_image,
-        positive_fraction,
-        bbox_reg_weights,
-        # Faster R-CNN inference
-        score_thresh,
-        box_nms_thresh,
-        detections_per_img,
-        # Rotated Faster R-CNN inference
-    ):
-        super(OrientedRCNNRoIHead, self).__init__(
-            box_roi_pool,
-            box_head,
-            box_predictor,
-            # Rotated Faster R-CNN training
-            fg_iou_thresh,
-            bg_iou_thresh,
-            batch_size_per_image,
-            positive_fraction,
-            bbox_reg_weights,
-            # Faster R-CNN inference
-            score_thresh,
-            box_nms_thresh,
-            detections_per_img,
-        )
-        if bbox_reg_weights is None:
-            bbox_reg_weights = (10, 10, 5, 5, 10)
-        
-        self.matched_box_key = "oboxes"
-        self.check_target_keys = ["oboxes", "labels"]
-        self.box_coder = XYWHA_XYWHA_BoxCoder(bbox_reg_weights)
-        self.box_similarity = box_ops.box_iou_rotated
         
 class RotatedFasterRCNNRoIHead(RoIHeads):
     def __init__(

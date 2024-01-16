@@ -14,8 +14,6 @@ from ops._box_convert import (
     poly2obb,
     poly2obb_np,
     obb2poly,
-    obb2poly_np,
-    obb2hbb,
     hbb2obb,
 )
 from detectron2._C import (
