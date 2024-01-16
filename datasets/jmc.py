@@ -3,9 +3,9 @@ from typing import  Literal, Dict, Any
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from .base import BaseDataset, collate_fn
+from .base import BaseXYWHADataset, collate_fn
 
-class JMCDataset(BaseDataset):
+class JMCDataset(BaseXYWHADataset):
     CLASSES = ('background', 'front_retractor', 'back_retractor',
                'front_adjuster', 'back_adjuster', 'front_latch', 'back_latch')
 

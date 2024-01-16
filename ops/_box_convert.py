@@ -44,8 +44,8 @@ def poly2obb_np(polys):
     w = np.sqrt((polys[..., 0] - polys[..., 2])**2 + (polys[..., 1] - polys[..., 3])**2)
     h = np.sqrt((polys[..., 2] - polys[..., 4])**2 + (polys[..., 3] - polys[..., 5])**2)
     
-    xywha = np.stack([x, y, w, h, theta], axis=-1)
-    return xywha
+    obb = np.stack([x, y, w, h, theta], axis=-1)
+    return obb
 
 # def poly2obb(polys):
 #     theta = torch.atan2(-(polys[..., 3] - polys[..., 1]),
@@ -82,8 +82,8 @@ def poly2obb(polys):
     w = torch.sqrt((polys[..., 0] - polys[..., 2])**2 + (polys[..., 1] - polys[..., 3])**2)
     h = torch.sqrt((polys[..., 2] - polys[..., 4])**2 + (polys[..., 3] - polys[..., 5])**2)
     
-    xywha = torch.stack([x, y, w, h, theta], dim=-1)
-    return xywha
+    obb = torch.stack([x, y, w, h, theta], dim=-1)
+    return obb
 
 def obb2poly(obboxes):
     center, w, h, theta = torch.split(obboxes, [2, 1, 1, 1], dim=-1)
@@ -95,8 +95,21 @@ def obb2poly(obboxes):
     point2 = center + vector1 - vector2
     point3 = center - vector1 - vector2
     point4 = center - vector1 + vector2
-    xy4 = torch.cat([point1, point2, point3, point4], dim=-1)
-    return xy4
+    poly = torch.cat([point1, point2, point3, point4], dim=-1)
+    return poly
+
+def obb2poly_np(obboxes):
+    # torch.split not same as np.split
+    center, w, h, theta = np.split(obboxes, [2, 3, 4], axis=-1)
+    Cos, Sin = np.cos(theta), np.sin(theta)
+    vector1 = np.concatenate([w/2 * Cos, -w/2 * Sin], axis=-1)
+    vector2 = np.concatenate([-h/2 * Sin, -h/2 * Cos], axis=-1)
+    point1 = center + vector1 + vector2
+    point2 = center + vector1 - vector2
+    point3 = center - vector1 - vector2
+    point4 = center - vector1 + vector2
+    poly = np.concatenate([point1, point2, point3, point4], axis=-1)
+    return poly
 
 def poly2hbb_np(polys):
     assert polys.shape[-1] == 8
@@ -104,10 +117,10 @@ def poly2hbb_np(polys):
         
     x1, y1 = polys.min(axis=0)
     x2, y2 = polys.max(axis=0)
-    xyxy = np.array([x1, y1, x2, y2])
-    return xyxy
+    hbb = np.array([x1, y1, x2, y2])
+    return hbb
 
-def hbb2obb(hbboxes):
+def hbb2obb(hbb):
     """Convert horizontal bounding boxes to oriented bounding boxes.
 
     Args:
@@ -116,20 +129,20 @@ def hbb2obb(hbboxes):
     Returns:
         obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
     """
-    is_list = isinstance(hbboxes, list)
+    is_list = isinstance(hbb, list)
     if is_list:
-        hbboxes = torch.cat(hbboxes, dim=0)
+        hbb = torch.cat(hbb, dim=0)
         
-    x = (hbboxes[..., 0] + hbboxes[..., 2]) * 0.5
-    y = (hbboxes[..., 1] + hbboxes[..., 3]) * 0.5
-    w = hbboxes[..., 2] - hbboxes[..., 0]
-    h = hbboxes[..., 3] - hbboxes[..., 1]
+    x = (hbb[..., 0] + hbb[..., 2]) * 0.5
+    y = (hbb[..., 1] + hbb[..., 3]) * 0.5
+    w = hbb[..., 2] - hbb[..., 0]
+    h = hbb[..., 3] - hbb[..., 1]
     theta = torch.full(x.shape, 0.0, dtype=x.dtype, device=x.device)
     results = torch.stack([x, y, w, h, theta], dim=1)
-    xywha = torch.split(results, dim=0) if is_list else results
-    return xywha
+    obb = torch.split(results, dim=0) if is_list else results
+    return obb
 
-def obb2xyxy(rbboxes):
+def obb2hbb(obb):
     """Convert oriented bounding boxes to horizontal bounding boxes.
 
     Args:
@@ -138,11 +151,11 @@ def obb2xyxy(rbboxes):
     Returns:
         hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
     """
-    x = rbboxes[:, 0::5]
-    y = rbboxes[:, 1::5]
-    w = rbboxes[:, 2::5]
-    h = rbboxes[:, 3::5]
-    a = rbboxes[:, 4::5]
+    x = obb[:, 0::5]
+    y = obb[:, 1::5]
+    w = obb[:, 2::5]
+    h = obb[:, 3::5]
+    a = obb[:, 4::5]
     cosa = torch.cos(a)
     sina = torch.sin(a)
     

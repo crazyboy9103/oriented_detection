@@ -34,7 +34,7 @@ def encode_midpoint_boxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) ->
     ex_widths = bboxes[:, 2] - bboxes[:, 0]
     ex_heights = bboxes[:, 3] - bboxes[:, 1]
 
-    hbb = box_ops.obb2xyxy(gt_bboxes)
+    hbb = box_ops.obb2hbb(gt_bboxes)
     poly = box_ops.obb2poly(gt_bboxes)
     
     gt_ctr_x = (hbb[:, 0] + hbb[:, 2]) * 0.5

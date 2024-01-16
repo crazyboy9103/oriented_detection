@@ -66,9 +66,9 @@ def concat_box_prediction_layers(box_cls: List[Tensor], box_regression: List[Ten
     # all feature levels concatenated, so we keep the same representation
     # for the objectness and the box_regression
     for box_cls_per_level, box_regression_per_level in zip(box_cls, box_regression):
-        # Number of features, number of anchors * number of classes(=1), height, width
+        # Number of features, number of anchors * number of classes(=2 for rpn), height, width
         N, AxC, H, W = box_cls_per_level.shape
-        # Number of anchors * regression box dimension (4 for rotated faster rcnn, 6 for oriented faster rcnn) 
+        # Number of anchors * regression box dimension (4 for rotated faster rcnn, 6 for oriented rcnn) 
         AxBoxdim = box_regression_per_level.shape[1]
         A = AxBoxdim // box_dim 
         C = AxC // A

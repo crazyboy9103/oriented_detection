@@ -3,9 +3,9 @@ from typing import  Literal, Dict, Any
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from .base import BaseDataset, collate_fn
+from .base import BaseXY4Dataset, collate_fn
 
-class DotaDataset(BaseDataset):
+class DotaDataset(BaseXY4Dataset):
     CLASSES = ('background', 'plane', 'baseball-diamond', 'bridge', 'ground-track-field',
                'small-vehicle', 'large-vehicle', 'ship', 'tennis-court',
                'basketball-court', 'storage-tank', 'soccer-ball-field',

@@ -47,6 +47,14 @@ class BaseDataset(Dataset):
             value = cls.class_to_idx(value)
         return cls.PALETTE[value]
     
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        ann = self.data[idx]
+        image = read_image(ann['image_path'], ImageReadMode.RGB).float() / 255.0
+        return image, ann
+    
     def prepare_data(self, save_dir, data_path):
         assert save_dir.split(".")[-1] in ("pth", "pt"), "save_dir must be a .pth or .pt file"
 
@@ -64,7 +72,12 @@ class BaseDataset(Dataset):
         }
         torch.save(data, save_dir)
         return data
-        
+    
+    def load_anns(self, ann_folder):
+        raise NotImplementedError
+    
+    
+class BaseXY4Dataset(BaseDataset):
     def load_anns(self, ann_folder):
         """
             Args:
@@ -75,10 +88,10 @@ class BaseDataset(Dataset):
         ann_files = glob.glob(ann_folder + '/*.txt')
         # Use images with annotations
         img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".png") for ann_file in ann_files]
-        # For det_demo
-        if not os.path.isfile(img_files[0]):
-            img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".jpg") for ann_file in ann_files]
-            assert img_files, "No image files found"
+        # # For det_demo
+        # if not os.path.isfile(img_files[0]):
+        #     img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".jpg") for ann_file in ann_files]
+        #     assert img_files, "No image files found"
             
         anns = []
         image_id = 0
@@ -154,14 +167,89 @@ class BaseDataset(Dataset):
 
             anns.append(ann)
         return anns
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, idx):
-        ann = self.data[idx]
-        image = read_image(ann['image_path'], ImageReadMode.RGB).float() / 255.0
-        return image, ann
 
+class BaseXYWHADataset(BaseDataset):
+    def load_anns(self, ann_folder):
+        """
+            Args:
+                ann_folder: folder that contains MVTec annotations txt files
+        """
+        cls_map = {c: i for i, c in enumerate(self.CLASSES)}
+        
+        ann_files = glob.glob(ann_folder + '/*.txt')
+        # Use images with annotations
+        img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".png") for ann_file in ann_files]
+        # For det_demo
+        if not os.path.isfile(img_files[0]):
+            img_files = [ann_file.replace("annfiles", "images").replace(".txt", ".jpg") for ann_file in ann_files]
+            assert img_files, "No image files found"
+            
+        anns = []
+        image_id = 0
+        for img_file, ann_file in tqdm(zip(img_files, ann_files), desc="Loading annotations", total=len(img_files)):
+            gt_difficulty = []
+            
+            gt_bboxes = []
+            gt_oboxes = []
+            gt_polygons = []
+            
+            gt_labels = []
+            
+            if os.path.getsize(ann_file) == 0:
+                continue
+
+            with open(ann_file, "r") as f:
+                s = f.readlines()
+                for si in s:
+                    bbox_info = si.split()
+                    
+                    obb = np.array(bbox_info[:5], dtype=np.float32)
+                    try:
+                        poly = box_ops.obb2poly_np(obb)
+                        hbb = box_ops.poly2hbb_np(poly)
+                        assert hbb[2] > hbb[0] and hbb[3] > hbb[1], "hbb must be valid"
+                        
+                        if len(obb) == 0:
+                            # Weird error in DOTA dataset, skip this instance
+                            print("[DATA]", obb, hbb)
+                            continue
+                        
+                    except Exception as e:
+                        raise e
+                    
+                    cls_name = bbox_info[5]
+                    difficulty = int(bbox_info[6])
+                    label = cls_map[cls_name]
+
+                    gt_difficulty.append(difficulty)
+                    gt_bboxes.append(hbb)
+                    gt_oboxes.append(obb)
+                    gt_labels.append(label)
+                    gt_polygons.append(poly)
+                    
+            ann = {}
+            if gt_bboxes:
+                # convert to array then tensor 
+                # https://github.com/pytorch/pytorch/blob/main/torch/csrc/utils/tensor_new.cpp#L262 
+                # may be due to memory allocation
+                ann['difficulty'] = torch.tensor(np.array(gt_difficulty), dtype=torch.int64)
+                ann['image_path'] = img_file
+                ann['ann_path'] = ann_file
+                ann['bboxes'] = torch.tensor(np.array(gt_bboxes), dtype=torch.float32)
+                
+                ann['oboxes'] = torch.tensor(np.array(gt_oboxes), dtype=torch.float32)
+                
+                ann['labels'] = torch.tensor(np.array(gt_labels), dtype=torch.int64)
+                ann['polygons'] = torch.tensor(np.array(gt_polygons), dtype=torch.float32)
+                ann['image_id'] = torch.tensor([image_id], dtype=torch.int64)
+                
+                image_id += 1
+                
+            else:
+                continue
+
+            anns.append(ann)
+        return anns
+    
 def collate_fn(batch):
     return tuple(zip(*batch))

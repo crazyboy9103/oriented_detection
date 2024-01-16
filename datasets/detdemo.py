@@ -3,9 +3,9 @@ from typing import  Literal, Dict, Any
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from .base import BaseDataset, collate_fn
+from .base import BaseXYWHADataset, collate_fn
 
-class DetDemoDataset(BaseDataset):
+class DetDemoDataset(BaseXYWHADataset):
     CLASSES = ('background', 'spray', 'foam', 'settingspray', 'sanitizer',
                'wet_tissue', 'cylindrical', 'handcream')
 

@@ -3,9 +3,9 @@ from typing import Literal, Dict, Any
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from .base import BaseDataset, collate_fn
+from .base import BaseXYWHADataset, collate_fn
 
-class MVTecDataset(BaseDataset):
+class MVTecDataset(BaseXYWHADataset):
     CLASSES = ('background', 'nut', 'wood_screw', 'lag_wood_screw', 'bolt',  # 0-4
                'black_oxide_screw', 'shiny_screw', 'short_wood_screw', 'long_lag_screw',  # 5-8
                'large_nut', 'nut2', 'nut1', 'machine_screw', # 9-12

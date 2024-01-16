@@ -94,12 +94,13 @@ class ModelWrapper(LightningModule):
         self.log('valid-loss', loss)
         # skip image logging for sweeps
         if not hasattr(self, 'config') and batch_idx == self.trainer.num_val_batches[0]-3:
-            size = self.model_config.get("min_size") * 2 # upsample for better visualization
+            size = self.model_config.get("min_size") # * 2 # upsample for better visualization
+            resize_image = (size, size)
             self.logger.experiment.log({
                 "images": [
                     wandb.Image(pil_image, caption=image_path.split('/')[-1])
                     for pil_image, image_path in (
-                        plot_image(image, output, target, self.dataset, 0.5, resize=(size, size)) for image, output, target in zip(images, outputs, targets)
+                        plot_image(image, output, target, self.dataset, 0.5, resize=None) for image, output, target in zip(images, outputs, targets)
                     )
                 ]
             })
