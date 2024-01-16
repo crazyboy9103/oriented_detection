@@ -413,14 +413,12 @@ def model_builder(
     
     # Anchors
     anchor_sizes = (
-        (   
-            4,
-            8,
-            16,
-            32,
-            64
-        ),
-    ) * 5
+        (8,),
+        (16,),
+        (32,),
+        (64,),
+        (128,),
+    )
     
     aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
     
@@ -428,8 +426,10 @@ def model_builder(
     
     pool_size = 7
     
+    num_fc = 2
+
     box_head = FastRCNNConvFCHead(
-        (backbone.out_channels, pool_size, pool_size), [256, 256, 256, 256], [1024], norm_layer=fast_rcnn_norm_layer
+        (backbone.out_channels, pool_size, pool_size), [256] * num_fc, [1024], norm_layer=fast_rcnn_norm_layer
     )
     
     # Roi pooler

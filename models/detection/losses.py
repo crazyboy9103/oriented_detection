@@ -38,8 +38,8 @@ def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_ta
     classification_loss = F.cross_entropy(class_logits, labels)
     # classification_loss = FocalLoss()(class_logits, labels)
         
-    # pos_inds = (labels > 0).nonzero().squeeze()
-    pos_inds = torch.where(labels > 0)[0]
+    pos_inds = (labels > 0).nonzero().squeeze()
+    # pos_inds = torch.where(labels > 0)[0]
     labels_pos = labels[pos_inds]
     
     obox_regression_targets = torch.cat(obox_regression_targets, dim=0)

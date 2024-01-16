@@ -169,16 +169,16 @@ if __name__ == '__main__':
     # Model arguments
     parser.add_argument('--model_type', type=str, default='rotated', choices=['rotated'],
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
-    parser.add_argument('--backbone_type', type=str, default="efficientnet_b0", 
+    parser.add_argument('--backbone_type', type=str, default="mobilenetv3large", 
                         choices=["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"])
-    parser.add_argument('--pretrained', type=str2bool, default=False)
-    parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
+    parser.add_argument('--pretrained', type=str2bool, default=True)
+    parser.add_argument('--pretrained_backbone', type=str2bool, default=False)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)
     parser.add_argument('--trainable_backbone_layers', type=int, default=4, choices=[0, 1, 2, 3, 4, 5, 6]) # 5: one batchnorm layer # max 5 for resnet & efnet, 6 for mv3l
     
     # Training arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])

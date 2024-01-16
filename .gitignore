@@ -1,5 +1,7 @@
 # logs
 wandb/
+lightning_logs/
+
 # compile
 build/
 detectron2.egg-info/ 
