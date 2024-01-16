@@ -42,8 +42,8 @@ def main(args):
 
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
-            "./datasets/mvtec_balanced.pth", 
-            "/datasets/mvtec", 
+            "./datasets/mvtec.pth", 
+            "/datasets/split_ss_mvtec_balanced", 
             train_loader_kwargs, 
             test_loader_kwargs
         )
@@ -190,7 +190,7 @@ if __name__ == '__main__':
     
     # Training arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])

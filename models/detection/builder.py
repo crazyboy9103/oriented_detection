@@ -415,11 +415,7 @@ def model_builder(
     # Anchors
     anchor_sizes = (
         (
-            4,
-            8,
             16,
-            32,
-            64
         ),
     ) * 5
     

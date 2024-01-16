@@ -9,7 +9,7 @@ from PIL import ImageDraw, ImageFont
 from datasets.base import BaseDataset
 from ops import boxes as box_ops
 
-FONT = "./fonts/roboto_medium.ttf" # os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans-Bold.ttf')
+FONT = "./fonts/roboto_medium.ttf"
 FONT = ImageFont.truetype(FONT, size=8)
 ANCHOR_TYPE = 'lt'
 
