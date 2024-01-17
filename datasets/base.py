@@ -149,7 +149,7 @@ class BaseXY4Dataset(BaseDataset):
                 ann['difficulty'] = torch.tensor(np.array(gt_difficulty), dtype=torch.int64)
                 ann['image_path'] = img_file
                 ann['ann_path'] = ann_file
-                ann['bboxes'] = torch.tensor(np.array(gt_bboxes), dtype=torch.float32)
+                ann['hboxes'] = torch.tensor(np.array(gt_bboxes), dtype=torch.float32)
                 # ann['area'] = torch.tensor(np.array(gt_areas), dtype=torch.float32)
                 
                 ann['oboxes'] = torch.tensor(np.array(gt_oboxes), dtype=torch.float32)
@@ -235,7 +235,7 @@ class BaseXYWHADataset(BaseDataset):
                 ann['difficulty'] = torch.tensor(np.array(gt_difficulty), dtype=torch.int64)
                 ann['image_path'] = img_file
                 ann['ann_path'] = ann_file
-                ann['bboxes'] = torch.tensor(np.array(gt_bboxes), dtype=torch.float32)
+                ann['hboxes'] = torch.tensor(np.array(gt_bboxes), dtype=torch.float32)
                 
                 ann['oboxes'] = torch.tensor(np.array(gt_oboxes), dtype=torch.float32)
                 

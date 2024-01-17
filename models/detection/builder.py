@@ -8,7 +8,6 @@ from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops import MultiScaleRoIAlign
 from torchvision.ops.feature_pyramid_network import ExtraFPNBlock, LastLevelMaxPool
 from torchvision.models.detection.faster_rcnn import TwoMLPHead, FastRCNNConvFCHead
-from torchvision.models.detection.anchor_utils import AnchorGenerator
 # Backbones
 from torchvision.models.resnet import resnet18, resnet50
 from torchvision.models.mobilenetv3 import mobilenet_v3_large
@@ -39,9 +38,12 @@ from torchvision.models.efficientnet import (
     EfficientNet_B3_Weights,
 )
 
+from ops.poolers import MultiScaleRotatedRoIAlign
+
 from .roi_heads import RotatedFasterRCNNRoIHead
-from .rpn import RPNHead, RegionProposalNetwork
+from .rpn import RPNHead, RotatedRegionProposalNetwork
 from .transform import GeneralizedRCNNTransform
+from .anchor_utils import RotatedAnchorGenerator
 
 def _efficientnet_extractor(
     backbone: EfficientNet,
@@ -88,17 +90,18 @@ def _efficientnet_extractor(
         backbone, return_layers, in_channels_list, out_channels, extra_blocks=extra_blocks, norm_layer=norm_layer
     )
 
-def _default_anchor_generator():
+def _default_rotated_anchor_generator():
     # each feature map i has sizes[i] x sizes[i] anchors per spatial location. 
     # We use 5 feature maps. 
     # 800, 200, 100, 50, 25
     sizes = ((8,),) * 5
     ratios = ((0.5, 1.0, 2.0),) * len(sizes)
-    return AnchorGenerator(sizes=sizes, aspect_ratios=ratios)
+    angles = ((-120, -30, 0, 30, 120),) * len(sizes)
+    return RotatedAnchorGenerator(sizes=sizes, aspect_ratios=ratios, angles=angles)
 
 def _check_for_degenerate_boxes(targets):
     for target_idx, target in enumerate(targets):
-        boxes = target["bboxes"]
+        boxes = target["hboxes"]
         degenerate_boxes = boxes[:, 2:] <= boxes[:, :2]
         if degenerate_boxes.any():
             # print the first degenerate box
@@ -235,7 +238,7 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         image_mean=None,
         image_std=None,
         # RPN parameters
-        rpn_anchor_generator: nn.Module = _default_anchor_generator(),
+        rpn_anchor_generator: nn.Module = _default_rotated_anchor_generator(),
         rpn=None,
         rpn_head=None,
         rpn_pre_nms_top_n_train=2000,
@@ -419,13 +422,12 @@ def model_builder(
         (64,),
         (128,),
     )
+    aspect_ratios = ((1.0),) * len(anchor_sizes)
+    angles = ((-90, 90),) * len(anchor_sizes)
     
-    aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
-    
-    rpn_anchor_generator = AnchorGenerator(anchor_sizes, aspect_ratios) 
+    rpn_anchor_generator = RotatedAnchorGenerator(anchor_sizes, aspect_ratios, angles) 
     
     pool_size = 7
-    
     num_fc = 2
 
     box_head = FastRCNNConvFCHead(
@@ -461,13 +463,13 @@ def model_builder(
         
     return model
 
-FasterRCNN_RPNHead = partial(RPNHead, bbox_dim=4)
+RotatedRPNHead = partial(RPNHead, bbox_dim=5)
 
 RotatedFasterRCNN = partial(RotatedRCNNWrapper, 
-                            rpn_head=FasterRCNN_RPNHead,
-                            rpn=RegionProposalNetwork, 
+                            rpn_head=RotatedRPNHead,
+                            rpn=RotatedRegionProposalNetwork, 
                             roi_head=RotatedFasterRCNNRoIHead)
 
-faster_rcnn_builder = partial(model_builder, 
+rotated_faster_rcnn_builder = partial(model_builder, 
                               model=RotatedFasterRCNN, 
-                              roi_pooler=MultiScaleRoIAlign)
+                              roi_pooler=MultiScaleRotatedRoIAlign)

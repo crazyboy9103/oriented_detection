@@ -42,6 +42,7 @@ class DetectionEvaluator:
             self.targets[class_idx] = [] 
             self.detections[class_idx] = [] 
             self.scores[class_idx] = [] 
+            
     def accumulate(
         self, 
         targets: List[Dict[str, Tensor]],

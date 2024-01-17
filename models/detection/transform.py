@@ -248,8 +248,8 @@ class GeneralizedRCNNTransform(nn.Module):
         if target is None:
             return image, target
 
-        if "bboxes" in target:
-            target["bboxes"] = _resize_boxes(target["bboxes"], (h, w), image.shape[-2:])
+        if "hboxes" in target:
+            target["hboxes"] = _resize_boxes(target["hboxes"], (h, w), image.shape[-2:])
         
         if "oboxes" in target:
             target["oboxes"] = _resize_oboxes(target["oboxes"], (h, w), image.shape[-2:])
@@ -274,8 +274,8 @@ class GeneralizedRCNNTransform(nn.Module):
         elif direction == 'diagonal':
             image = TF.vflip(TF.hflip(image))
         
-        if "bboxes" in target:
-            target["bboxes"] = _flip_boxes(target["bboxes"], image.shape[-2:], direction)
+        if "hboxes" in target:
+            target["hboxes"] = _flip_boxes(target["hboxes"], image.shape[-2:], direction)
         if "oboxes" in target:
             target["oboxes"] = _flip_oboxes(target["oboxes"], image.shape[-2:], direction)
         return image, target
@@ -311,8 +311,8 @@ class GeneralizedRCNNTransform(nn.Module):
         if self.training:
             return result
         for i, (pred, im_s, o_im_s) in enumerate(zip(result, image_shapes, original_image_sizes)):
-            if "bboxes" in result[i]:
-                result[i]["bboxes"] = _resize_boxes(pred["bboxes"], im_s, o_im_s)
+            if "hboxes" in result[i]:
+                result[i]["hboxes"] = _resize_boxes(pred["hboxes"], im_s, o_im_s)
             
             if "oboxes" in result[i]:
                 result[i]["oboxes"] = _resize_oboxes(pred["oboxes"], im_s, o_im_s)

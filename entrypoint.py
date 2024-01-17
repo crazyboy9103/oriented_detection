@@ -43,7 +43,7 @@ def main(args):
     elif args.dataset == 'mvtec':
         datamodule = MVTecDataModule(
             "./datasets/mvtec.pth", 
-            "/datasets/mvtec_screws", 
+            "/datasets/mvtec", 
             train_loader_kwargs, 
             test_loader_kwargs
         )
@@ -178,11 +178,11 @@ if __name__ == '__main__':
     
     # Training arguments
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
-    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--num_epochs', type=int, default=12)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
-    parser.add_argument('--precision', type=str, default='16-mixed', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
+    parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     parser.add_argument('--image_size', type=int, default=256)
     parser.add_argument('--skip_flip', type=str2bool, default=True)
     parser.add_argument('--skip_image_transform', type=str2bool, default=True)

@@ -16,7 +16,7 @@ class FocalLoss(nn.Module):
         focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
         return focal_loss
 
-def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_targets):
+def rotated_faster_rcnn_loss(class_logits, obox_regression, labels, obox_regression_targets):
     # type: (Tensor, Tensor, List[Tensor], Tensor) -> Tuple[Tensor, Tensor, Tensor]
     """
     Computes the loss for Oriented R-CNN.
@@ -45,8 +45,6 @@ def oriented_rcnn_loss(class_logits, obox_regression, labels, obox_regression_ta
     obox_regression = obox_regression.reshape(N, obox_regression.size(-1) // 5, 5) # N x C x 5
     
     preds = obox_regression[pos_inds, labels_pos]
-    preds[:, -1] = preds[:, -1] % (2 * torch.pi)
-    
     targets = obox_regression_targets[pos_inds]
     
     obox_loss = F.smooth_l1_loss(

@@ -6,10 +6,10 @@ from torch import nn, Tensor
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import XYXY_XYWHA_BoxCoder
-from models.detection.losses import oriented_rcnn_loss
+from models.detection.boxcoders import XYWHA_XYWHA_BoxCoder
+from models.detection.losses import rotated_faster_rcnn_loss
 
-class RoIHeads(nn.Module):
+class RotatedFasterRCNNRoIHead(nn.Module):
     def __init__(
         self,
         box_roi_pool,
@@ -31,6 +31,7 @@ class RoIHeads(nn.Module):
         self.score_thresh = score_thresh
         self.box_nms_thresh = box_nms_thresh
         self.detections_per_img = detections_per_img
+        
         if bbox_reg_weights is None:
             bbox_reg_weights = (10, 10, 5, 5, 10)
             
@@ -40,12 +41,14 @@ class RoIHeads(nn.Module):
         self.fg_bg_sampler = det_utils.BalancedPositiveNegativeSampler(batch_size_per_image, positive_fraction)
         
         
-        self.box_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
+        self.box_coder = XYWHA_XYWHA_BoxCoder(bbox_reg_weights)
         
         self.box_roi_pool = box_roi_pool
         self.box_head = box_head
         self.box_predictor = box_predictor
+        self.box_similarity = box_ops.box_iou_rotated
 
+        self.check_target_keys = ["oboxes", "labels"]
 
 
     def assign_targets_to_proposals(self, proposals: List[Tensor], gt_boxes: List[Tensor], gt_labels: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
@@ -108,7 +111,7 @@ class RoIHeads(nn.Module):
         floating_point_types = (torch.float, torch.double, torch.half)
         
         data_types = {
-            "bboxes": floating_point_types,
+            "hboxes": floating_point_types,
             "oboxes": floating_point_types,
             "labels": (torch.int64,)
         }
@@ -134,7 +137,7 @@ class RoIHeads(nn.Module):
     
         dtype = proposals[0].dtype
 
-        gt_boxes = [t["bboxes"].to(dtype) for t in targets]
+        gt_boxes = [t["oboxes"].to(dtype) for t in targets]
         gt_labels = [t["labels"] for t in targets]
 
         proposals = self.add_gt_proposals(proposals, gt_boxes)
@@ -272,7 +275,7 @@ class RoIHeads(nn.Module):
         
             class_logits, obox_regression = self.logits_and_regression(features, train_proposals, image_shapes)
             
-            loss_classifier, loss_obox_reg = oriented_rcnn_loss(
+            loss_classifier, loss_obox_reg = rotated_faster_rcnn_loss(
                 class_logits, obox_regression, train_labels, rotated_regression_targets
             )
         else:
@@ -294,42 +297,3 @@ class RoIHeads(nn.Module):
         }
 
         return result, losses
-        
-class RotatedFasterRCNNRoIHead(RoIHeads):
-    def __init__(
-        self,
-        box_roi_pool,
-        box_head,
-        box_predictor,
-        # Rotated Faster R-CNN training
-        fg_iou_thresh,
-        bg_iou_thresh,
-        batch_size_per_image,
-        positive_fraction,
-        bbox_reg_weights,
-        # Faster R-CNN inference
-        score_thresh,
-        box_nms_thresh,
-        detections_per_img,
-    ):
-        super(RotatedFasterRCNNRoIHead, self).__init__(
-            box_roi_pool,
-            box_head,
-            box_predictor,
-            # Rotated Faster R-CNN training
-            fg_iou_thresh,
-            bg_iou_thresh,
-            batch_size_per_image,
-            positive_fraction,
-            bbox_reg_weights,
-            # Faster R-CNN inference
-            score_thresh,
-            box_nms_thresh,
-            detections_per_img,
-        )
-        if bbox_reg_weights is None:
-            bbox_reg_weights = (10, 10, 5, 5, 10)
-
-        self.check_target_keys = ["bboxes", "oboxes", "labels"]
-        self.box_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
-        self.box_similarity = box_ops.box_iou

@@ -1,13 +1,5 @@
-from typing import Tuple, Literal
-
 import torch
 from torch import Tensor
-from torchvision.ops import (
-    batched_nms,
-    remove_small_boxes,
-    clip_boxes_to_image,
-    box_iou,
-)
 
 from ops._box_convert import (
     poly2hbb_np,

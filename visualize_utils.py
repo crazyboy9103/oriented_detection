@@ -33,13 +33,13 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
             color = data.get_palette(dt_label)
             draw.polygon(dt_opoly, outline=color, width=4)
 
-            text_to_draw = f'DT[{data.idx_to_class(dt_label)} {dt_score:.2f}% {dt_angle:.2f}rad]'
+            text_to_draw = f'DT[{data.idx_to_class(dt_label)} {dt_score:.2f}% {dt_angle:.2f}deg]'
             rectangle = get_xy_bounds_text(draw, dt_opoly[:2], text_to_draw)
             draw.rectangle(rectangle, fill="black")
             draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
                       fill=color, font=FONT, anchor=ANCHOR_TYPE)
 
-    gt_boxes = target['bboxes'].detach().cpu().tolist()
+    gt_boxes = target['hboxes'].detach().cpu().tolist()
     gt_angles = target['oboxes'][:, -1].detach().cpu().tolist()
     gt_opolys = target['polygons'].detach().cpu().tolist()
     gt_labels = target['labels'].detach().cpu().tolist()
@@ -50,7 +50,7 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
         gt_label = data.idx_to_class(gt_label)
         draw.rectangle(gt_box, outline=color)
         draw.polygon(gt_opoly, outline=color)
-        text_to_draw = f'GT[{gt_label} {gt_angle:.2f}rad]'
+        text_to_draw = f'GT[{gt_label} {gt_angle:.2f}deg]'
         rectangle = get_xy_bounds_text(draw, gt_box[:2], text_to_draw)
         draw.rectangle(rectangle, fill="black")
         draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,

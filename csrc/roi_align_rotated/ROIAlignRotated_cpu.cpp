@@ -229,7 +229,7 @@ void ROIAlignRotatedForward(
     T roi_center_h = current_roi[2] * spatial_scale - offset;
     T roi_width = current_roi[3] * spatial_scale;
     T roi_height = current_roi[4] * spatial_scale;
-    T theta = current_roi[5]; // * M_PI / 180.0;
+    T theta = current_roi[5] * M_PI / 180.0;
     T cos_theta = cos(theta);
     T sin_theta = sin(theta);
 
@@ -345,7 +345,7 @@ void ROIAlignRotatedBackward(
     T roi_center_h = current_roi[2] * spatial_scale - offset;
     T roi_width = current_roi[3] * spatial_scale;
     T roi_height = current_roi[4] * spatial_scale;
-    T theta = current_roi[5]; // * M_PI / 180.0;
+    T theta = current_roi[5] * M_PI / 180.0;
     T cos_theta = cos(theta);
     T sin_theta = sin(theta);
 

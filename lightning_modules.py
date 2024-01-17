@@ -9,7 +9,7 @@ import wandb
 
 from configs import TrainConfig, ModelConfig, Kwargs
 from datasets.base import BaseDataset
-from models.detection.builder import faster_rcnn_builder
+from models.detection.builder import rotated_faster_rcnn_builder
 from scheduler import LinearWarmUpMultiStepDecay
 from evaluation.neurocle_evaluator import DetectionEvaluator, NeurocleDetectionEvaluator
 from visualize_utils import plot_image
@@ -72,9 +72,6 @@ class ModelWrapper(LightningModule):
             self.log(f'train-{k}', v.item())
         self.log('train-loss', loss.item())
         print("loss", loss.item())
-        # if batch_idx % 10 == 0:
-        #     torch.cuda.empty_cache()
-        #     gc.collect()
         return loss
 
     def on_train_epoch_end(self):
@@ -150,4 +147,4 @@ class RotatedFasterRCNN(ModelWrapper):
         dataset,
     ):
         super(RotatedFasterRCNN, self).__init__(train_config, model_config, kwargs, dataset)
-        self.model = faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
+        self.model = rotated_faster_rcnn_builder(**self.train_config, **self.model_config, kwargs=self.kwargs)
