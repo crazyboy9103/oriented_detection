@@ -5,7 +5,6 @@ from functools import partial
 import torch
 import torch.nn as nn
 from torchvision.ops import misc as misc_nn_ops
-from torchvision.ops import MultiScaleRoIAlign
 from torchvision.ops.feature_pyramid_network import ExtraFPNBlock, LastLevelMaxPool
 from torchvision.models.detection.faster_rcnn import TwoMLPHead, FastRCNNConvFCHead
 # Backbones
@@ -89,15 +88,6 @@ def _efficientnet_extractor(
     return BackboneWithFPN(
         backbone, return_layers, in_channels_list, out_channels, extra_blocks=extra_blocks, norm_layer=norm_layer
     )
-
-def _default_rotated_anchor_generator():
-    # each feature map i has sizes[i] x sizes[i] anchors per spatial location. 
-    # We use 5 feature maps. 
-    # 800, 200, 100, 50, 25
-    sizes = ((8,),) * 5
-    ratios = ((0.5, 1.0, 2.0),) * len(sizes)
-    angles = ((-120, -30, 0, 30, 120),) * len(sizes)
-    return RotatedAnchorGenerator(sizes=sizes, aspect_ratios=ratios, angles=angles)
 
 def _check_for_degenerate_boxes(targets):
     for target_idx, target in enumerate(targets):
@@ -238,7 +228,7 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         image_mean=None,
         image_std=None,
         # RPN parameters
-        rpn_anchor_generator: nn.Module = _default_rotated_anchor_generator(),
+        rpn_anchor_generator=None,
         rpn=None,
         rpn_head=None,
         rpn_pre_nms_top_n_train=2000,
@@ -317,15 +307,16 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         super(RotatedRCNNWrapper, self).__init__(backbone, transform, rpn, roi_heads)
 
 def model_builder(
-    pretrained: bool = True,
-    pretrained_backbone: bool = True,
+    *,
+    pretrained,
+    pretrained_backbone,
     progress: bool = True, 
-    num_classes: Optional[int] = 91,
-    trainable_backbone_layers: Optional[int] = None,
-    model: Optional[nn.Module] = None,
-    freeze_bn: bool = True,
-    backbone_type: str = "mobilenetv3large",
-    roi_pooler = MultiScaleRoIAlign,
+    num_classes,
+    trainable_backbone_layers,
+    model,
+    freeze_bn,
+    backbone_type,
+    roi_pooler,
     **kwargs
 ):
     weights = None
@@ -415,15 +406,12 @@ def model_builder(
         backbone = _efficientnet_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
     
     # Anchors
+    num_feature_maps = 5
     anchor_sizes = (
-        (8,),
-        (16,),
-        (32,),
-        (64,),
-        (128,),
-    )
-    aspect_ratios = ((1.0),) * len(anchor_sizes)
-    angles = ((-90, 90),) * len(anchor_sizes)
+        (8, 16, 32, 64, 128)
+    ) * num_feature_maps
+    aspect_ratios = ((0.5, 1.0, 2.0),) * num_feature_maps
+    angles = ((-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150),) * num_feature_maps
     
     rpn_anchor_generator = RotatedAnchorGenerator(anchor_sizes, aspect_ratios, angles) 
     

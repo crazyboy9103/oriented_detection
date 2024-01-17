@@ -164,6 +164,14 @@ def validate_args(args):
     if args.dataset == "dota" and args.image_size not in (256, 512, 800):
         raise ValueError("Invalid image size for DOTA dataset")
     
+    if "resnet" in args.backbone_type or "efficientnet" in args.backbone_type:
+        args.trainable_backbone_layers = min(args.trainable_backbone_layers, 5)
+        
+    elif "mobilenetv3" in args.backbone_type:
+        args.trainable_backbone_layers = min(args.trainable_backbone_layers, 6)
+        
+        
+    
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Rotated Faster R-CNN and Oriented R-CNN')
     # Model arguments
