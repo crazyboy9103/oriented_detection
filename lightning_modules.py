@@ -98,7 +98,7 @@ class ModelWrapper(LightningModule):
                 "images": [
                     wandb.Image(pil_image, caption=image_path.split('/')[-1])
                     for pil_image, image_path in (
-                        plot_image(image, output, target, self.dataset, 0.5, resize=(size, size)) for image, output, target in zip(images, outputs, targets)
+                        plot_image(image, output, target, self.dataset, 0.5, resize=None) for image, output, target in zip(images, outputs, targets)
                     )
                 ]
             })

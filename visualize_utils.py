@@ -9,8 +9,8 @@ from PIL import ImageDraw, ImageFont
 from datasets.base import BaseDataset
 from ops import boxes as box_ops
 
-FONT = os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans-Bold.ttf')
-FONT = ImageFont.truetype(FONT, size=8)
+FONT = "./fonts/roboto_medium.ttf" # os.path.join(cv2.__path__[0], 'qt', 'fonts', 'DejaVuSans-Bold.ttf')
+FONT = ImageFont.truetype(FONT, size=14)
 ANCHOR_TYPE = 'lt'
 
 def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: Type[BaseDataset], o_score_threshold: float = 0.3, resize: Optional[Tuple[int, int]] = None):
@@ -26,29 +26,31 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
         dt_oboxes = dt_oboxes[omask].cpu()
         dt_opolys = box_ops.obb2poly(dt_oboxes).to(int).tolist()
         dt_olabels = dt_olabels[omask].cpu().tolist()
+        dt_angles = dt_oboxes[:, -1].tolist()
         dt_oscores = dt_oscores[omask].cpu().tolist()
 
-        for dt_opoly, dt_label, dt_score in zip(dt_opolys, dt_olabels, dt_oscores):
+        for dt_opoly, dt_label, dt_angle, dt_score in zip(dt_opolys, dt_olabels, dt_angles, dt_oscores):
             color = data.get_palette(dt_label)
             dt_label = data.idx_to_class(dt_label)
             draw.polygon(dt_opoly, outline=color, width=5)
-            text_to_draw = f'{dt_label} {dt_score:.2f}'
+            text_to_draw = f'DT[{dt_label} {dt_score:.2f}% {dt_angle:.2f}rad]'
             rectangle = get_xy_bounds_text(draw, dt_opoly[:2], text_to_draw)
             draw.rectangle(rectangle, fill="black")
             draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
                       fill=color, font=FONT, anchor=ANCHOR_TYPE)
 
     gt_boxes = target['bboxes'].detach().cpu().tolist()
+    gt_angles = target['oboxes'][:, -1].detach().cpu().tolist()
     gt_opolys = target['polygons'].detach().cpu().tolist()
     gt_labels = target['labels'].detach().cpu().tolist()
 
     # gts
-    for gt_box, gt_opoly, gt_label in zip(gt_boxes, gt_opolys, gt_labels):
+    for gt_box, gt_angle, gt_opoly, gt_label in zip(gt_boxes, gt_angles, gt_opolys, gt_labels):
         color = data.get_palette(gt_label)
         gt_label = data.idx_to_class(gt_label)
         draw.rectangle(gt_box, outline=color)
         draw.polygon(gt_opoly, outline=color)
-        text_to_draw = f'GT {gt_label}'
+        text_to_draw = f'GT[{gt_label} {gt_angle:.2f}rad]'
         rectangle = get_xy_bounds_text(draw, gt_box[:2], text_to_draw)
         draw.rectangle(rectangle, fill="black")
         draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
@@ -60,7 +62,7 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
     return image, target["image_path"]
 
 
-def get_xy_bounds_text(draw: ImageDraw.Draw, top_left: Iterable, text: str, padding:int =5):
+def get_xy_bounds_text(draw: ImageDraw.Draw, top_left: Iterable, text: str, padding:int=8):
     top_left = top_left[:]
     top_left[0] = max(0, top_left[0]-padding)
     top_left[1] = max(0, top_left[1]-padding)
