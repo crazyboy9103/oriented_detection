@@ -1,0 +1,7 @@
+Metadata-Version: 2.1
+Name: mmrotate
+Version: 1.0.0
+Summary: Detectron2 + mmrotate csrc extension
+Home-page: 
+Author: FAIR & OpenMMLab
+Requires-Python: >=3.7

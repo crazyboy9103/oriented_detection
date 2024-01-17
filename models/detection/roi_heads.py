@@ -27,15 +27,18 @@ class RoIHeads(nn.Module):
         detections_per_img,
     ):
         super().__init__()
-
+        self.batch_size_per_image = batch_size_per_image
+        self.score_thresh = score_thresh
+        self.box_nms_thresh = box_nms_thresh
+        self.detections_per_img = detections_per_img
+        if bbox_reg_weights is None:
+            bbox_reg_weights = (10, 10, 5, 5, 10)
+            
         # assign ground-truth boxes for each proposal
         self.proposal_matcher = det_utils.Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=False)
 
         self.fg_bg_sampler = det_utils.BalancedPositiveNegativeSampler(batch_size_per_image, positive_fraction)
-        self.batch_size_per_image = batch_size_per_image
         
-        if bbox_reg_weights is None:
-            bbox_reg_weights = (10, 10, 5, 5, 10)
         
         self.box_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
         
@@ -43,9 +46,7 @@ class RoIHeads(nn.Module):
         self.box_head = box_head
         self.box_predictor = box_predictor
 
-        self.score_thresh = score_thresh
-        self.box_nms_thresh = box_nms_thresh
-        self.detections_per_img = detections_per_img
+
 
     def assign_targets_to_proposals(self, proposals: List[Tensor], gt_boxes: List[Tensor], gt_labels: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
         matched_idxs = []
@@ -130,10 +131,7 @@ class RoIHeads(nn.Module):
     ):
         # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
         self.check_targets(targets)
-        
-        # Avoid in-place operation
-        proposals = [proposal.clone() for proposal in proposals]
-
+    
         dtype = proposals[0].dtype
 
         gt_boxes = [t["bboxes"].to(dtype) for t in targets]
