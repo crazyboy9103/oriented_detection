@@ -111,6 +111,9 @@ def rotated_roi_align(
     if not isinstance(rois, torch.Tensor):
         rois = _convert_to_roi_format(rois)
     orig_dtype = input.dtype
+    if orig_dtype == torch.float16:
+        input = input.float()
+        rois = rois.float()
     return roi_align_rotated(
         input, rois, spatial_scale, output_size, sampling_ratio
     ).to(dtype=orig_dtype)
