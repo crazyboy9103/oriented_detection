@@ -34,6 +34,7 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     gt_widths =  gt_bboxes[:, 2]
     gt_heights = gt_bboxes[:, 3]
     gt_angles =  gt_bboxes[:, 4]
+    gt_angles = gt_angles % (2 * torch.pi) # angle is already in [0, 2pi), but just in case
     # gt_angles = (gt_angles + torch.pi) % (2 * torch.pi) - torch.pi
     
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
@@ -70,7 +71,8 @@ def decode_hboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
     pred_w = torch.exp(dw) * widths[:, None]
     pred_h = torch.exp(dh) * heights[:, None]
-    pred_a = (da + torch.pi) % (2 * torch.pi) - torch.pi 
+    # pred_a = (da + torch.pi) % (2 * torch.pi) - torch.pi 
+    pred_a = da % (2 * torch.pi)
     
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes

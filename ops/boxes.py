@@ -11,8 +11,9 @@ from torchvision.ops import (
 
 from ops._box_convert import (
     poly2hbb_np,
-    poly2obb,
     poly2obb_np,
+    poly2obb,
+    obb2poly_np,
     obb2poly,
     hbb2obb,
 )

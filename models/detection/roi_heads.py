@@ -131,20 +131,15 @@ class RoIHeads(nn.Module):
         # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
         self.check_targets(targets)
         
-        if getattr(self, "matched_box_key") == None:
-            raise ValueError("matched_box_key is not set")
-        
         # Avoid in-place operation
         proposals = [proposal.clone() for proposal in proposals]
 
         dtype = proposals[0].dtype
 
-        gt_boxes = [t[self.matched_box_key].to(dtype) for t in targets]
+        gt_boxes = [t["bboxes"].to(dtype) for t in targets]
         gt_labels = [t["labels"] for t in targets]
 
-        if self.training:
-            proposals = self.add_gt_proposals(proposals, gt_boxes)
-            
+        proposals = self.add_gt_proposals(proposals, gt_boxes)
         # get matching gt indices for each proposal
         matched_idxs, labels = self.assign_targets_to_proposals(proposals, gt_boxes, gt_labels)
         
@@ -162,21 +157,21 @@ class RoIHeads(nn.Module):
     ):
         dtype = proposals[0].dtype
         device = proposals[0].device
-        # Is this justified ? => see https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
+        # See https://github.com/facebookresearch/maskrcnn-benchmark/issues/570#issuecomment-473218934
         # append ground-truth bboxes to proposals for classifier 
         # (box regressor does not obtain any gradients from them)
         matched_gt_oboxes = []
         gt_oboxes = [t["oboxes"].to(dtype) for t in targets]
-        
         for img_id, img_sampled_idxs in enumerate(sampled_idxs):
             proposals[img_id] = proposals[img_id][img_sampled_idxs]
             labels[img_id] = labels[img_id][img_sampled_idxs]
+            matched_idxs[img_id] = matched_idxs[img_id][img_sampled_idxs]
             
             img_gt_oboxes = gt_oboxes[img_id]
             if img_gt_oboxes.numel() == 0:
                 img_gt_oboxes = torch.zeros((1, 5), dtype=dtype, device=device)
                 
-            matched_gt_oboxes.append(img_gt_oboxes[matched_idxs[img_id][img_sampled_idxs]])
+            matched_gt_oboxes.append(img_gt_oboxes[matched_idxs[img_id]])
         
         rotated_regression_targets = self.box_coder.encode(matched_gt_oboxes, proposals)
         return proposals, labels, rotated_regression_targets
@@ -191,7 +186,6 @@ class RoIHeads(nn.Module):
         
         # TODO Use rotated clipping
         # horizontal based can result in misaligned horizontal and rotated boxes
-        box_dim = 5
         box_clip = lambda x, y: x # TODO: clipping for rotated boxes
         
         device = class_logits.device
@@ -221,7 +215,7 @@ class RoIHeads(nn.Module):
             labels = labels[:, 1:]
 
             # batch everything, by making every class prediction be a separate instance
-            boxes = boxes.reshape(-1, box_dim)
+            boxes = boxes.reshape(-1, 5)
             scores = scores.reshape(-1)
             labels = labels.reshape(-1)
             # remove low scoring boxes
@@ -242,7 +236,15 @@ class RoIHeads(nn.Module):
             all_labels.append(labels)
             
         return all_boxes, all_scores, all_labels
-
+    
+    def logits_and_regression(self, features, proposals, image_shapes) -> Tuple[Tensor, Tensor]:
+        # Horizontal ROI Pooling
+        box_features = self.box_roi_pool(features, proposals, image_shapes)
+        # Shared head 
+        box_features = self.box_head(box_features)
+        class_logits, obox_regression = self.box_predictor(box_features)
+        return class_logits, obox_regression
+    
     def forward(
         self,
         features: Dict[str, Tensor],
@@ -258,36 +260,25 @@ class RoIHeads(nn.Module):
             image_shapes (List[Tuple[H, W]])
             targets (List[Dict])
         """
-        
-
-        train_proposals, train_labels, matched_idxs, sampled_idxs = self.select_training_samples(proposals, targets)
-        train_proposals, train_labels, rotated_regression_targets = self.filter_training_samples(train_proposals, train_labels, matched_idxs, sampled_idxs, targets)
-        
-            
         result: List[Dict[str, torch.Tensor]] = []
         losses = {}
         if self.training:
+            train_proposals, train_labels, matched_idxs, sampled_idxs = self.select_training_samples(proposals, targets)
+            train_proposals, train_labels, rotated_regression_targets = self.filter_training_samples(train_proposals, train_labels, matched_idxs, sampled_idxs, targets)
+            
             if train_labels is None:
                 raise ValueError("labels cannot be None")
             
             if rotated_regression_targets is None:
                 raise ValueError("regression_targets cannot be None")
-            
-            # Horizontal ROI Pooling
-            box_features = self.box_roi_pool(features, train_proposals, image_shapes)
-            # Shared head 
-            box_features = self.box_head(box_features)
-            class_logits, obox_regression = self.box_predictor(box_features)
+        
+            class_logits, obox_regression = self.logits_and_regression(features, train_proposals, image_shapes)
             
             loss_classifier, loss_obox_reg = oriented_rcnn_loss(
                 class_logits, obox_regression, train_labels, rotated_regression_targets
             )
         else:
-            # Horizontal ROI Pooling
-            box_features = self.box_roi_pool(features, proposals, image_shapes)
-            # Shared head 
-            box_features = self.box_head(box_features)
-            class_logits, obox_regression = self.box_predictor(box_features)
+            class_logits, obox_regression = self.logits_and_regression(features, proposals, image_shapes)
             
             oboxes, oscores, olabels = self.postprocess_detections(class_logits, obox_regression, proposals, image_shapes)
             for i in range(len(oboxes)):
@@ -299,27 +290,9 @@ class RoIHeads(nn.Module):
                     }
                 )
             
-            # loss for inference
-            # may be inaccurate
-            # valid_logits = []
-            # valid_obox = []
-            # for img_id, img_sampled_idxs in enumerate(sampled_idxs):
-            #     mapped_idxs = (img_id + 1) * img_sampled_idxs
-            #     valid_logits.append(class_logits[mapped_idxs])
-            #     valid_obox.append(obox_regression[mapped_idxs])
-
-            # valid_logits = torch.cat(valid_logits)
-            # valid_obox = torch.cat(valid_obox)
-            
-            # loss_classifier, loss_obox_reg = oriented_rcnn_loss(
-            #     valid_logits, valid_obox, train_labels, rotated_regression_targets
-            # )
-            loss_classifier = torch.tensor(0.0)
-            loss_obox_reg = torch.tensor(0.0)
-
         losses = {
-            "loss_classifier": loss_classifier, 
-            "loss_obox_reg": loss_obox_reg
+            "loss_classifier": loss_classifier if self.training else torch.tensor(0.0), 
+            "loss_obox_reg": loss_obox_reg if self.training else torch.tensor(0.0)
         }
 
         return result, losses
@@ -358,8 +331,7 @@ class RotatedFasterRCNNRoIHead(RoIHeads):
         )
         if bbox_reg_weights is None:
             bbox_reg_weights = (10, 10, 5, 5, 10)
-            
-        self.matched_box_key = "bboxes"
+
         self.check_target_keys = ["bboxes", "oboxes", "labels"]
         self.box_coder = XYXY_XYWHA_BoxCoder(bbox_reg_weights)
         self.box_similarity = box_ops.box_iou

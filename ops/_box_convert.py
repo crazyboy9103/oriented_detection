@@ -35,10 +35,22 @@ def poly2obb(polys):
     obb = torch.stack([x, y, w, h, theta], dim=-1)
     return obb
 
+def obb2poly_np(obboxes):
+    center, w, h, theta = np.split(obboxes, [2, 3, 4], axis=-1)
+    Cos, Sin = np.cos(theta), np.sin(theta)
+    vector1 = np.concatenate([w/2 * Cos, -w/2 * Sin], axis=-1)
+    vector2 = np.concatenate([-h/2 * Sin, -h/2 * Cos], axis=-1)
+    point1 = center + vector1 + vector2
+    point2 = center + vector1 - vector2
+    point3 = center - vector1 - vector2
+    point4 = center - vector1 + vector2
+    poly = np.concatenate([point1, point2, point3, point4], axis=-1)
+    return poly
+
 def obb2poly(obboxes):
+    # torch.split not same as np.split
     center, w, h, theta = torch.split(obboxes, [2, 1, 1, 1], dim=-1)
     Cos, Sin = torch.cos(theta), torch.sin(theta)
-
     vector1 = torch.cat([w/2 * Cos, -w/2 * Sin], dim=-1)
     vector2 = torch.cat([-h/2 * Sin, -h/2 * Cos], dim=-1)
     point1 = center + vector1 + vector2
