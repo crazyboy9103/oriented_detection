@@ -29,11 +29,7 @@ def encode_hboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     ex_widths = bboxes[:, 2] - bboxes[:, 0]
     ex_heights = bboxes[:, 3] - bboxes[:, 1]
 
-    gt_ctr_x =   gt_bboxes[:, 0]
-    gt_ctr_y =   gt_bboxes[:, 1]
-    gt_widths =  gt_bboxes[:, 2]
-    gt_heights = gt_bboxes[:, 3]
-    gt_angles =  gt_bboxes[:, 4]
+    gt_ctr_x, gt_ctr_y, gt_widths, gt_heights, gt_angles = gt_bboxes.unbind(1)
     gt_angles = gt_angles % (2 * torch.pi) # angle is already in [0, 2pi), but just in case
     # gt_angles = (gt_angles + torch.pi) % (2 * torch.pi) - torch.pi
     

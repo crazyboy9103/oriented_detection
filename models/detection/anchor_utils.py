@@ -73,11 +73,11 @@ class RotatedAnchorGenerator(nn.Module):
         aspect_ratios = torch.as_tensor(aspect_ratios, dtype=dtype, device=device)
         angles = torch.as_tensor(angles, dtype=dtype, device=device)
     
-        h_ratios = torch.sqrt(aspect_ratios)
-        w_ratios = 1 / h_ratios
+        h_ratios = torch.sqrt(aspect_ratios) # sqrt(h/w)
+        w_ratios = 1 / h_ratios # sqrt(w/h)
 
-        ws = (w_ratios[:, None] * scales[None, :]).view(-1)
-        hs = (h_ratios[:, None] * scales[None, :]).view(-1)
+        ws = (w_ratios[:, None] * scales[None, :]).view(-1) # sqrt(w/h) * sqrt(wh) = ws
+        hs = (h_ratios[:, None] * scales[None, :]).view(-1) # sqrt(h/w) * sqrt(wh) = hs
 
         zeros = torch.zeros_like(ws, dtype=dtype, device=device)
         anchors = torch.stack([zeros, zeros, ws, hs], dim=1)

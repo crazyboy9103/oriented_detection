@@ -411,7 +411,7 @@ def model_builder(
         (8, 16, 32, 64, 128, 256)
     ) * num_feature_maps
     aspect_ratios = ((0.1, 0.5, 1.0, 1.5, 2.0),) * num_feature_maps
-    angles = ((-120, -60, 0, 60, 120),) * num_feature_maps
+    angles = ((-90, -60, -30, 0, 30, 60, 90),) * num_feature_maps
     
     rpn_anchor_generator = RotatedAnchorGenerator(anchor_sizes, aspect_ratios, angles) 
     

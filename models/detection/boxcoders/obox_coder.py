@@ -29,13 +29,19 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     
     ex_ctr_x, ex_ctr_y, ex_widths, ex_heights, ex_angles = bboxes.unbind(1)
     gt_ctr_x, gt_ctr_y, gt_widths, gt_heights, gt_angles = gt_bboxes.unbind(1)
- 
-    targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
-    targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
-    targets_dw = ww * torch.log(gt_widths / ex_widths)
-    targets_dh = wh * torch.log(gt_heights / ex_heights)
+    
+    mean = (ex_widths + ex_heights) / 2
+
+    targets_dx = wx * (gt_ctr_x - ex_ctr_x) / mean
+    targets_dy = wy * (gt_ctr_y - ex_ctr_y) / mean
+    targets_dw = ww * torch.log(gt_widths / mean)
+    targets_dh = wh * torch.log(gt_heights / mean)
     
     targets_da = gt_angles - ex_angles 
+    targets_da = torch.where(torch.abs(targets_da) >= 180.0, targets_da + 2 * torch.sign(ex_angles) * 180.0, targets_da)
+    # larger = torch.abs(targets_da) >= 180.0
+    # targets_da[larger] = targets_da + 2 * torch.sign(ex_angles) * 180.0
+
     targets_da = (targets_da + 180.0) % 360.0 - 180.0 # make it in range [-180, 180)
     targets_da = targets_da * wa * torch.pi / 180.0
     

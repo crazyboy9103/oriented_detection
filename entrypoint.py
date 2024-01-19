@@ -32,6 +32,7 @@ def main(args):
     )
 
     if args.dataset == 'dota':
+        raise NotImplementedError
         datamodule = DotaDataModule(
             f"./datasets/dota_{args.image_size}.pth",
             f"/datasets/split_ss_dota_{args.image_size}",
@@ -85,8 +86,8 @@ def main(args):
     
     finetuning = args.pretrained | args.pretrained_backbone
     model_config = ModelConfig(
-        min_size = args.image_size,
-        max_size = args.image_size,
+        min_size = args.min_size,
+        max_size = args.max_size,
         image_mean = (0.485, 0.456, 0.406) if finetuning else dataset.IMAGE_MEAN,
         image_std = (0.229, 0.224, 0.225) if finetuning else dataset.IMAGE_STD,
         rpn_pre_nms_top_n_train = 2000,
@@ -191,7 +192,9 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=24)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
-    parser.add_argument('--image_size', type=int, default=256)
+    parser.add_argument('--min_size', type=int, default=360)
+    parser.add_argument('--max_size', type=int, default=480)
+    parser.add_argument('--image_size', type=str, default="480x360")
     parser.add_argument('--skip_flip', type=str2bool, default=True)
     parser.add_argument('--skip_image_transform', type=str2bool, default=True)
     parser.add_argument('--learning_rate', type=float, default=0.001)

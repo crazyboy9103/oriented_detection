@@ -1,7 +1,6 @@
 import os
 from typing import Dict, Any, Iterable, Tuple, Optional, Type
 
-import cv2
 import torch
 from torchvision.transforms.functional import to_pil_image
 from PIL import ImageDraw, ImageFont
@@ -9,79 +8,81 @@ from PIL import ImageDraw, ImageFont
 from datasets.base import BaseDataset
 from ops import boxes as box_ops
 
-FONT = "./fonts/roboto_medium.ttf"
-FONT = ImageFont.truetype(FONT, size=12)
+FONT_PATH = "./fonts/roboto_medium.ttf"
+FONT_SIZE = 12
+FONT = ImageFont.truetype(FONT_PATH, size=FONT_SIZE)
 ANCHOR_TYPE = 'lt'
 
-# # Convert the angle from degrees to radians
-# angle_radians = torch.deg2rad(angle)
-
-# # Length of the arrow's pointer
-# arrow_length = 20  # Adjust this value as needed
-
-# # Calculate the coordinates of the arrow's tip
-# tip_x = x_center + arrow_length * math.cos(angle_radians)
-# tip_y = y_center - arrow_length * math.sin(angle_radians)
-
-# # Calculate the coordinates of the arrow's base (where it connects to the bounding box)
-# base_x = x_center
-# base_y = y_center
-# draw.line([(base_x, base_y), (tip_x, tip_y)], fill="blue", width=2)
-
-def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: Type[BaseDataset], o_score_threshold: float = 0.3, resize: Optional[Tuple[int, int]] = None):
+def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], 
+               data: Type[BaseDataset], o_score_threshold: float = 0.5, 
+               resize: Optional[Tuple[int, int]] = None):
     image = to_pil_image(image.detach().cpu())
     draw = ImageDraw.Draw(image)
 
+    # Draw detected objects
     if 'oboxes' in output:
-        dt_oboxes = output['oboxes'].detach()
-        dt_olabels = output['olabels'].detach()
-        dt_oscores = output['oscores'].detach()
-        omask = dt_oscores > o_score_threshold
+        draw_detected_objects(draw, output, data, o_score_threshold)
 
-        dt_oboxes = dt_oboxes[omask].cpu()
-        dt_opolys = box_ops.obb2poly(dt_oboxes).to(int).tolist()
-        dt_olabels = dt_olabels[omask].cpu().tolist()
-        dt_angles = dt_oboxes[:, -1].tolist()
-        dt_oscores = dt_oscores[omask].cpu().tolist()
-
-        for dt_opoly, dt_label, dt_angle, dt_score in zip(dt_opolys, dt_olabels, dt_angles, dt_oscores):
-            color = data.get_palette(dt_label)
-            draw.polygon(dt_opoly, outline=color, width=4)
-
-            text_to_draw = f'DT[{data.idx_to_class(dt_label)} {dt_score * 100:.2f}% {dt_angle:.2f}deg]'
-            rectangle = get_xy_bounds_text(draw, dt_opoly[:2], text_to_draw)
-            draw.rectangle(rectangle, fill="black")
-            draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
-                      fill=color, font=FONT, anchor=ANCHOR_TYPE)
-
-    gt_boxes = target['hboxes'].detach().cpu().tolist()
-    gt_angles = target['oboxes'][:, -1].detach().cpu().tolist()
-    gt_opolys = target['polygons'].detach().cpu().tolist()
-    gt_labels = target['labels'].detach().cpu().tolist()
-
-    # gts
-    for gt_box, gt_angle, gt_opoly, gt_label in zip(gt_boxes, gt_angles, gt_opolys, gt_labels):
-        color = data.get_palette(gt_label)
-        gt_label = data.idx_to_class(gt_label)
-
-        draw.polygon(gt_opoly, outline=color)
-        text_to_draw = f'GT[{gt_label} {gt_angle:.2f}deg]'
-        rectangle = get_xy_bounds_text(draw, gt_box[:2], text_to_draw)
-        draw.rectangle(rectangle, fill="black")
-        draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
-                  fill=color, font=FONT, anchor=ANCHOR_TYPE)
+    # Draw ground truth objects
+    draw_ground_truth_objects(draw, target, data)
 
     if resize is not None:
         image = image.resize(resize)
         
     return image, target["image_path"]
 
+def draw_detected_objects(draw, output, data, score_threshold):
+    dt_oboxes = output['oboxes'].detach()
+    dt_olabels = output['olabels'].detach()
+    dt_oscores = output['oscores'].detach()
+    omask = dt_oscores > score_threshold
 
-def get_xy_bounds_text(draw: ImageDraw.Draw, top_left: Iterable, text: str, padding:int=2):
-    top_left = top_left[:]
-    top_left[0] = max(0, top_left[0]-padding)
-    top_left[1] = max(0, top_left[1]-padding)
+    for dt_obox, dt_label, dt_score in zip(dt_oboxes[omask], dt_olabels[omask], dt_oscores[omask]):
+        color = data.get_palette(dt_label.item())
+        dt_opoly = box_ops.obb2poly(dt_obox).to(int).tolist()
+        draw.polygon(dt_opoly, outline=color, width=4)
+        
+        str_obox = obox_to_str(dt_obox)
+
+        text_to_draw = f'DT[{data.idx_to_class(dt_label.item())} {dt_score * 100:.2f}% {str_obox}]'
+        rectangle = get_xy_bounds_text(draw, dt_opoly[:2], text_to_draw)
+        draw.rectangle(rectangle, fill="black")
+        draw.text(rectangle[:2], text_to_draw,
+                  fill=color, font=FONT, anchor=ANCHOR_TYPE)
+
+def draw_ground_truth_objects(draw, target, data):
+    for gt_obox, gt_label in zip(target['oboxes'].detach(), target['labels'].detach()):
+        color = data.get_palette(gt_label.item())
+        gt_opoly = box_ops.obb2poly(gt_obox).to(int).tolist()
+        draw.polygon(gt_opoly, outline=color)
+
+        str_obox = obox_to_str(gt_obox)
+
+        text_to_draw = f'GT[{data.idx_to_class(gt_label.item())} {str_obox}]'
+        rectangle = get_xy_bounds_text(draw, gt_opoly[:2], text_to_draw)
+        draw.rectangle(rectangle, fill="black")
+        draw.text(rectangle[:2], text_to_draw,
+                  fill=color, font=FONT, anchor=ANCHOR_TYPE)
+
+def obox_to_str(obox: torch.Tensor) -> str:
+    obox = obox.tolist()
+    for i in range(4):
+        obox[i] = int(obox[i])
+    obox[-1] = round(obox[-1], 1)
+    return str(obox)
     
-    x1, y1, x2, y2 = draw.textbbox(
-        xy=top_left, text=text, font=FONT, anchor=ANCHOR_TYPE)
-    return x1, y1, x2 + padding, y2 + padding
+def get_xy_bounds_text(draw: ImageDraw.Draw, top_left: Iterable[int], text: str, padding: int = 2) -> Tuple[int, int, int, int]:
+    """
+    Calculate the bounding box for the text with padding.
+
+    Args:
+        draw (ImageDraw.Draw): The drawing context.
+        top_left (Iterable[int]): The top-left position to start the text.
+        text (str): The text to be drawn.
+        padding (int): The padding around the text.
+
+    Returns:
+        Tuple[int, int, int, int]: The bounding box for the text (x1, y1, x2, y2).
+    """
+    x1, y1, x2, y2 = draw.textbbox(top_left, text, font=FONT)
+    return x1-padding, y1-padding, x2+padding, y2+padding
