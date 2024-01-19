@@ -408,15 +408,15 @@ def model_builder(
     # Anchors
     num_feature_maps = 5
     anchor_sizes = (
-        (8, 16, 32, 64, 128)
+        (8, 16, 32, 64, 128, 256)
     ) * num_feature_maps
-    aspect_ratios = ((0.5, 1.0, 2.0),) * num_feature_maps
-    angles = ((-150, -120, -90, -60, -30, 0, 30, 60, 90, 120, 150),) * num_feature_maps
+    aspect_ratios = ((0.1, 0.5, 1.0, 1.5, 2.0),) * num_feature_maps
+    angles = ((-120, -60, 0, 60, 120),) * num_feature_maps
     
     rpn_anchor_generator = RotatedAnchorGenerator(anchor_sizes, aspect_ratios, angles) 
     
     pool_size = 7
-    num_fc = 2
+    num_fc = 4
 
     box_head = FastRCNNConvFCHead(
         (backbone.out_channels, pool_size, pool_size), [256] * num_fc, [1024], norm_layer=fast_rcnn_norm_layer

@@ -268,10 +268,10 @@ class RotatedFasterRCNNRoIHead(nn.Module):
             train_proposals, train_labels, rotated_regression_targets = self.filter_training_samples(train_proposals, train_labels, matched_idxs, sampled_idxs, targets)
             
             if train_labels is None:
-                raise ValueError("labels cannot be None")
+                raise ValueError("labels cannot be None while training")
             
             if rotated_regression_targets is None:
-                raise ValueError("regression_targets cannot be None")
+                raise ValueError("regression_targets cannot be None while training")
         
             class_logits, obox_regression = self.logits_and_regression(features, train_proposals, image_shapes)
             

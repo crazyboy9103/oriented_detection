@@ -28,18 +28,8 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     wa = weights[4]
     
     ex_ctr_x, ex_ctr_y, ex_widths, ex_heights, ex_angles = bboxes.unbind(1)
-    # ex_ctr_x = bboxes[:, 0]
-    # ex_ctr_y = bboxes[:, 1]
-    # ex_widths = bboxes[:, 2]
-    # ex_heights = bboxes[:, 3]
-    # ex_angles = bboxes[:, 4]
     gt_ctr_x, gt_ctr_y, gt_widths, gt_heights, gt_angles = gt_bboxes.unbind(1)
-    # gt_ctr_x =   gt_bboxes[:, 0]
-    # gt_ctr_y =   gt_bboxes[:, 1]
-    # gt_widths =  gt_bboxes[:, 2]
-    # gt_heights = gt_bboxes[:, 3]
-    # gt_angles =  gt_bboxes[:, 4]
-    
+ 
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
     targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
     targets_dw = ww * torch.log(gt_widths / ex_widths)
@@ -47,7 +37,7 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     
     targets_da = gt_angles - ex_angles 
     targets_da = (targets_da + 180.0) % 360.0 - 180.0 # make it in range [-180, 180)
-    targets_da *= wa * torch.pi / 180.0
+    targets_da = targets_da * wa * torch.pi / 180.0
     
     targets_dx = targets_dx.unsqueeze(1)
     targets_dy = targets_dy.unsqueeze(1)
@@ -59,10 +49,6 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
 
 def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xform_clip: float) -> Tensor:
     ctr_x, ctr_y, widths, heights, angles = bboxes.unbind(1)
-    # ctr_y = bboxes[:, 1]
-    # widths = bboxes[:, 2]
-    # heights = bboxes[:, 3]
-    # angles = bboxes[:, 4]
     
     wx, wy, ww, wh, wa = weights
     dx = pred_bboxes[:, 0::5] / wx
@@ -82,7 +68,6 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     # Following original RRPN implementation,
     # angles of deltas (da) are in radians while angles of boxes are in degrees.
     pred_a = (da * 180.0 / torch.pi + angles[:, None]) % 360.0 - 180.0 # make it in [-180, 180)
-    
     
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes

@@ -361,7 +361,7 @@ HOST_DEVICE_INLINE T rotated_boxes_intersection(
 
 template <typename T>
 HOST_DEVICE_INLINE T
-single_box_iou_rotated(T const* const box1_raw, T const* const box2_raw) {
+single_box_iou_rotated(T const* const box1_raw, T const* const box2_raw, bool angle_aware) {
   // shift center to the middle point to achieve higher precision in result
   RotatedBox<T> box1, box2;
   auto center_shift_x = (box1_raw[0] + box2_raw[0]) / 2.0;
@@ -385,6 +385,14 @@ single_box_iou_rotated(T const* const box1_raw, T const* const box2_raw) {
 
   T intersection = rotated_boxes_intersection<T>(box1, box2);
   T iou = intersection / (area1 + area2 - intersection);
+
+  if (angle_aware) {
+    // M_PI / 180. == 0.01745329251
+    T box1_a_rad = box1.a * 0.01745329251;
+    T box2_a_rad = box2.a * 0.01745329251;
+
+    iou *= max(0.0, cos(box1_a_rad - box2_a_rad));
+  }
   return iou;
 }
 

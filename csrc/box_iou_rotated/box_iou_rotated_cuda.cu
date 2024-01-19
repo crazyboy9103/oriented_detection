@@ -17,7 +17,8 @@ __global__ void box_iou_rotated_cuda_kernel(
     const int n_boxes2,
     const T* dev_boxes1,
     const T* dev_boxes2,
-    T* dev_ious) {
+    T* dev_ious,
+    bool angle_aware) {
   const int row_start = blockIdx.x * blockDim.x;
   const int col_start = blockIdx.y * blockDim.y;
 
@@ -58,14 +59,15 @@ __global__ void box_iou_rotated_cuda_kernel(
   if (threadIdx.x < row_size && threadIdx.y < col_size) {
     int offset = (row_start + threadIdx.x) * n_boxes2 + col_start + threadIdx.y;
     dev_ious[offset] = single_box_iou_rotated<T>(
-        block_boxes1 + threadIdx.x * 5, block_boxes2 + threadIdx.y * 5);
+        block_boxes1 + threadIdx.x * 5, block_boxes2 + threadIdx.y * 5, angle_aware);
   }
 }
 
 at::Tensor box_iou_rotated_cuda(
     // input must be contiguous
     const at::Tensor& boxes1,
-    const at::Tensor& boxes2) {
+    const at::Tensor& boxes2,
+    bool angle_aware) {
   using scalar_t = float;
   AT_ASSERTM(
       boxes1.scalar_type() == at::kFloat, "boxes1 must be a float tensor");
@@ -113,7 +115,8 @@ at::Tensor box_iou_rotated_cuda(
         num_boxes2,
         data1,
         data2,
-        (scalar_t*)ious.data_ptr<scalar_t>());
+        (scalar_t*)ious.data_ptr<scalar_t>(),
+        angle_aware);
 
     AT_CUDA_CHECK(cudaGetLastError());
   }

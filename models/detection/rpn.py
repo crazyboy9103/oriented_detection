@@ -46,7 +46,7 @@ class RPNHead(nn.Module):
         bbox_reg = []
         for feature in features:
             t = self.conv(feature)
-            t = F.relu(t)
+            # t = F.relu(t)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg

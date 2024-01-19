@@ -9,7 +9,7 @@ from ops import boxes as box_ops
 # Implemented based on the following:
 # https://github.com/rafaelpadilla/Object-Detection-Metrics
 class DetectionEvaluator:
-    def __init__(self, iou_threshold: float | List[float] = 0.5, rotated: bool = False, num_classes: int = 13):
+    def __init__(self, iou_threshold: float | List[float] = 0.5, rotated: bool = True, num_classes: int = 13):
         """Evaluator for axis-aligned or oriented object detection task. Computes precision, recall, f1-score, mAP and mIoU.
 
         Args:

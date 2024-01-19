@@ -8,7 +8,8 @@ template <typename scalar_t>
 at::Tensor nms_rotated_cpu_kernel(
     const at::Tensor& dets,
     const at::Tensor& scores,
-    const double iou_threshold) {
+    const double iou_threshold,
+    bool angle_aware) {
   // nms_rotated_cpu_kernel is modified from torchvision's nms_cpu_kernel,
   // however, the code in this function is much shorter because
   // we delegate the IoU computation for rotated boxes to
@@ -50,7 +51,7 @@ at::Tensor nms_rotated_cpu_kernel(
       }
 
       auto ovr = single_box_iou_rotated<scalar_t>(
-          dets[i].data_ptr<scalar_t>(), dets[j].data_ptr<scalar_t>());
+          dets[i].data_ptr<scalar_t>(), dets[j].data_ptr<scalar_t>(), angle_aware);
       if (ovr >= iou_threshold) {
         suppressed[j] = 1;
       }
@@ -63,11 +64,12 @@ at::Tensor nms_rotated_cpu(
     // input must be contiguous
     const at::Tensor& dets,
     const at::Tensor& scores,
-    const double iou_threshold) {
+    const double iou_threshold,
+    bool angle_aware) {
   auto result = at::empty({0}, dets.options());
 
   AT_DISPATCH_FLOATING_TYPES(dets.scalar_type(), "nms_rotated", [&] {
-    result = nms_rotated_cpu_kernel<scalar_t>(dets, scores, iou_threshold);
+    result = nms_rotated_cpu_kernel<scalar_t>(dets, scores, iou_threshold, angle_aware);
   });
   return result;
 }

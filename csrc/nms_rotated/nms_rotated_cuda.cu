@@ -22,7 +22,8 @@ __global__ void nms_rotated_cuda_kernel(
     const int n_boxes,
     const double iou_threshold,
     const T* dev_boxes,
-    unsigned long long* dev_mask) {
+    unsigned long long* dev_mask,
+    bool angle_aware) {
   // nms_rotated_cuda_kernel is modified from torchvision's nms_cuda_kernel
 
   const int row_start = blockIdx.y;
@@ -65,7 +66,7 @@ __global__ void nms_rotated_cuda_kernel(
     for (i = start; i < col_size; i++) {
       // Instead of devIoU used by original horizontal nms, here
       // we use the single_box_iou_rotated function from box_iou_rotated_utils.h
-      if (single_box_iou_rotated<T>(cur_box, block_boxes + i * 5) >
+      if (single_box_iou_rotated<T>(cur_box, block_boxes + i * 5, angle_aware) >
           iou_threshold) {
         t |= 1ULL << i;
       }
@@ -81,7 +82,8 @@ at::Tensor nms_rotated_cuda(
     // input must be contiguous
     const at::Tensor& dets,
     const at::Tensor& scores,
-    double iou_threshold) {
+    double iou_threshold,
+    bool angle_aware) {
   // using scalar_t = float;
   AT_ASSERTM(dets.is_cuda(), "dets must be a CUDA tensor");
   AT_ASSERTM(scores.is_cuda(), "scores must be a CUDA tensor");
@@ -108,7 +110,8 @@ at::Tensor nms_rotated_cuda(
             dets_num,
             iou_threshold,
             dets_sorted.data_ptr<scalar_t>(),
-            (unsigned long long*)mask.data_ptr<int64_t>());
+            (unsigned long long*)mask.data_ptr<int64_t>(),
+            angle_aware);
       });
 
   at::Tensor mask_cpu = mask.to(at::kCPU);

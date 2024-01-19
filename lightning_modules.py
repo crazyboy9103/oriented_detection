@@ -84,10 +84,10 @@ class ModelWrapper(LightningModule):
         targets = [{k: v for k, v in t.items()} for t in targets]
         
         loss_dict, outputs = self(images, targets)
-        loss = sum(loss.item() for loss in loss_dict.values())
         for k, v in loss_dict.items():
             self.log(f'valid-{k}', v.item())
-            
+        
+        loss = sum(loss.item() for loss in loss_dict.values())
         self.log('valid-loss', loss)
         # skip image logging for sweeps
         if not hasattr(self, 'config') and batch_idx == self.trainer.num_val_batches[0]-3:
@@ -115,12 +115,6 @@ class ModelWrapper(LightningModule):
         
         self.detection_evaluator.reset()
         
-        # neurocle_result = self.neurocle_detection_evaluator.result()
-        # for key, value in neurocle_result.items():
-        #     self.log(f"valid-{key}", value)
-        # print("neurocle_result", neurocle_result)
-        # self.neurocle_detection_evaluator.reset_states()
-        
         torch.cuda.empty_cache()
         gc.collect()
         
@@ -128,9 +122,15 @@ class ModelWrapper(LightningModule):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=1e-4)
         steps_per_epoch = self.trainer.estimated_stepping_batches // self.trainer.max_epochs
         # following milestones, warmup_iters are arbitrarily chosen
-        first, second = steps_per_epoch * int(self.trainer.max_epochs * 4/6), steps_per_epoch * int(self.trainer.max_epochs * 5/6)
-        warmup_iters = steps_per_epoch * int(self.trainer.max_epochs * 1/6)
-        scheduler = LinearWarmUpMultiStepDecay(optimizer, milestones=[first, second], gamma=1/3, warmup_iters=warmup_iters)
+        first, second = int(steps_per_epoch * self.trainer.max_epochs * 4/6), int(steps_per_epoch * self.trainer.max_epochs * 5/6)
+        warmup_iters = steps_per_epoch // 10
+        scheduler = LinearWarmUpMultiStepDecay(
+            optimizer, 
+            milestones=[first, second], 
+            gamma=1/3, 
+            warmup_start_lr=0,
+            warmup_iters=warmup_iters,
+        )
         scheduler_config = {
             "scheduler": scheduler,
             "interval": "step",

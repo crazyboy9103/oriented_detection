@@ -13,6 +13,21 @@ FONT = "./fonts/roboto_medium.ttf"
 FONT = ImageFont.truetype(FONT, size=12)
 ANCHOR_TYPE = 'lt'
 
+# # Convert the angle from degrees to radians
+# angle_radians = torch.deg2rad(angle)
+
+# # Length of the arrow's pointer
+# arrow_length = 20  # Adjust this value as needed
+
+# # Calculate the coordinates of the arrow's tip
+# tip_x = x_center + arrow_length * math.cos(angle_radians)
+# tip_y = y_center - arrow_length * math.sin(angle_radians)
+
+# # Calculate the coordinates of the arrow's base (where it connects to the bounding box)
+# base_x = x_center
+# base_y = y_center
+# draw.line([(base_x, base_y), (tip_x, tip_y)], fill="blue", width=2)
+
 def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, Any], data: Type[BaseDataset], o_score_threshold: float = 0.3, resize: Optional[Tuple[int, int]] = None):
     image = to_pil_image(image.detach().cpu())
     draw = ImageDraw.Draw(image)
@@ -33,7 +48,7 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
             color = data.get_palette(dt_label)
             draw.polygon(dt_opoly, outline=color, width=4)
 
-            text_to_draw = f'DT[{data.idx_to_class(dt_label)} {dt_score:.2f}% {dt_angle:.2f}deg]'
+            text_to_draw = f'DT[{data.idx_to_class(dt_label)} {dt_score * 100:.2f}% {dt_angle:.2f}deg]'
             rectangle = get_xy_bounds_text(draw, dt_opoly[:2], text_to_draw)
             draw.rectangle(rectangle, fill="black")
             draw.text([rectangle[0], (rectangle[1] + rectangle[3]) // 2], text_to_draw,
@@ -48,7 +63,7 @@ def plot_image(image: torch.Tensor, output: Dict[str, Any], target: Dict[str, An
     for gt_box, gt_angle, gt_opoly, gt_label in zip(gt_boxes, gt_angles, gt_opolys, gt_labels):
         color = data.get_palette(gt_label)
         gt_label = data.idx_to_class(gt_label)
-        draw.rectangle(gt_box, outline=color)
+
         draw.polygon(gt_opoly, outline=color)
         text_to_draw = f'GT[{gt_label} {gt_angle:.2f}deg]'
         rectangle = get_xy_bounds_text(draw, gt_box[:2], text_to_draw)
