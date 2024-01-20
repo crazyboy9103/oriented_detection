@@ -178,7 +178,7 @@ class DetectionEvaluator:
                 max_iou = -1
                 best_gt_idx = None
                 for gt_idx, gt_bbox in enumerate(gt_bboxes):                  
-                    iou = self.iou_calculator(dt_bbox[None, :], gt_bbox[None, :]).item()
+                    iou = self.iou_calculator(dt_bbox[None, :], gt_bbox[None, :], angle_aware=False).item()
                     if iou > max_iou:
                         max_iou = iou
                         best_gt_idx = gt_idx

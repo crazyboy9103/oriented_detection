@@ -34,8 +34,8 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
 
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / mean
     targets_dy = wy * (gt_ctr_y - ex_ctr_y) / mean
-    targets_dw = ww * torch.log(gt_widths / mean)
-    targets_dh = wh * torch.log(gt_heights / mean)
+    targets_dw = ww * torch.log(gt_widths / ex_widths)
+    targets_dh = wh * torch.log(gt_heights / ex_heights)
     
     targets_da = gt_angles - ex_angles 
     targets_da = torch.where(torch.abs(targets_da) >= 180.0, targets_da + 2 * torch.sign(ex_angles) * 180.0, targets_da)
@@ -65,7 +65,7 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     # Prevent sending too large values into torch.exp()
     dw = torch.clamp(dw, max=bbox_xform_clip)
     dh = torch.clamp(dh, max=bbox_xform_clip)
-    
+    # mean = (widths[:, None] + heights[:, None]) / 2 
     pred_ctr_x = dx * widths[:, None] + ctr_x[:, None]
     pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
     pred_w = torch.exp(dw) * widths[:, None]

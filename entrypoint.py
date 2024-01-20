@@ -95,7 +95,7 @@ def main(args):
         rpn_post_nms_top_n_train = 2000,
         rpn_post_nms_top_n_test = 2000,
         rpn_nms_thresh = 0.7,
-        rpn_fg_iou_thresh = 0.3,
+        rpn_fg_iou_thresh = 0.7,
         rpn_bg_iou_thresh = 0.3,
         rpn_batch_size_per_image = 256,
         rpn_positive_fraction = 0.5,
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--num_epochs', type=int, default=24)
+    parser.add_argument('--num_epochs', type=int, default=36)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     parser.add_argument('--min_size', type=int, default=360)

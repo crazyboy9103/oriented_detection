@@ -43,7 +43,7 @@ def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, angle_aware: bool = True) ->
 
 # Note: this function (nms_rotated) might be moved into
 # torchvision/ops/boxes.py in the future
-def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float, angle_aware: bool = False):
+def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float, angle_aware: bool = True):
     """
     Performs non-maximum suppression (NMS) on the rotated boxes according
     to their intersection-over-union (IoU).
