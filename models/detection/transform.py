@@ -42,7 +42,8 @@ def _resize_oboxes(oboxes: Tensor, original_size: List[int], new_size: List[int]
     # Converting angle back to degrees
     a_adjusted = torch.rad2deg(a_adjusted_rad)
     # Adjust angle range to [-180, 180)
-    a_adjusted = torch.remainder(a_adjusted + 180, 360) - 180
+    # a_adjusted = torch.remainder(a_adjusted + 180, 360) - 180
+    a_adjusted = torch.remainder(a_adjusted, 360)
 
     cx = cx * ratio_width
     cy = cy * ratio_height

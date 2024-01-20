@@ -39,7 +39,7 @@ class RotatedAnchorGenerator(nn.Module):
         self,
         sizes=((128, 256, 512),),
         aspect_ratios=((0.5, 1.0, 2.0),),
-        angles=((-90, -45, 0, 45, 90,))
+        angles=((0, 45, 90, 135, 180, 225, 270, 315),),
     ):
         super().__init__()
 
