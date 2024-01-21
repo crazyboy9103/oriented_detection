@@ -86,4 +86,4 @@ def get_xy_bounds_text(draw: ImageDraw.Draw, top_left: Iterable[int], text: str,
         Tuple[int, int, int, int]: The bounding box for the text (x1, y1, x2, y2).
     """
     x1, y1, x2, y2 = draw.textbbox(top_left, text, font=FONT)
-    return max(0, x1-padding), max(0, y1-padding), x2+padding, y2+padding
+    return x1-padding, y1-padding, x2+padding, y2+padding

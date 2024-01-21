@@ -30,6 +30,7 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     ex_ctr_x, ex_ctr_y, ex_widths, ex_heights, ex_angles = bboxes.unbind(1)
     gt_ctr_x, gt_ctr_y, gt_widths, gt_heights, gt_angles = gt_bboxes.unbind(1)
     
+    # when rotating the box, the width and height can be swapped, so use the mean of the two
     mean = (ex_widths + ex_heights) / 2
 
     targets_dx = wx * (gt_ctr_x - ex_ctr_x) / mean
@@ -38,12 +39,12 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     targets_dh = wh * torch.log(gt_heights / ex_heights)
     
     targets_da = gt_angles - ex_angles 
-    # targets_da = torch.where(torch.abs(targets_da) >= 180.0, targets_da + 2 * torch.sign(ex_angles) * 180.0, targets_da)
-    # larger = torch.abs(targets_da) >= 180.0
-    # targets_da[larger] = targets_da + 2 * torch.sign(ex_angles) * 180.0
+    targets_da = torch.where(torch.abs(targets_da) >= 180.0, targets_da + 2 * torch.sign(ex_angles) * 180.0, targets_da)
 
-    targets_da = torch.remainder(torch.abs(targets_da), 360.0) # (targets_da + 180.0) % 360.0 - 180.0 # make it in range [-180, 180)
-    targets_da = targets_da * wa * torch.pi / 180.0
+    # targets_da = torch.remainder(targets_da, 360.0) # (targets_da + 180.0) % 360.0 - 180.0 # make it in range [-180, 180)
+    # negative = targets_da < 0
+    # targets_da = torch.where(negative, targets_da + 360.0, targets_da)
+    targets_da = targets_da / 360.0 * wa # normalize to [-1, 1]
     
     targets_dx = targets_dx.unsqueeze(1)
     targets_dy = targets_dy.unsqueeze(1)
@@ -61,11 +62,10 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     dy = pred_bboxes[:, 1::5] / wy
     dw = pred_bboxes[:, 2::5] / ww
     dh = pred_bboxes[:, 3::5] / wh
-    da = pred_bboxes[:, 4::5] / wa
+    da = pred_bboxes[:, 4::5] / wa * 360.0
     # Prevent sending too large values into torch.exp()
     dw = torch.clamp(dw, max=bbox_xform_clip)
     dh = torch.clamp(dh, max=bbox_xform_clip)
-    # mean = (widths[:, None] + heights[:, None]) / 2 
     pred_ctr_x = dx * widths[:, None] + ctr_x[:, None]
     pred_ctr_y = dy * heights[:, None] + ctr_y[:, None]
     pred_w = torch.exp(dw) * widths[:, None]
@@ -74,8 +74,8 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     # Following original RRPN implementation,
     # angles of deltas (da) are in radians while angles of boxes are in degrees.
     # pred_a = (da * 180.0 / torch.pi + angles[:, None]) % 360.0 - 180.0 # make it in [-180, 180)
-    pred_a = (da * 180.0 / torch.pi + angles[:, None]) 
-    pred_a = torch.remainder(torch.abs(pred_a), 360.0)
+    pred_a = (da + angles[:, None]) 
+    # pred_a = torch.remainder(pred_a, 360.0)
 
     pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_w, pred_h, pred_a], dim=2).flatten(1)
     return pred_boxes

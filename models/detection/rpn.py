@@ -6,11 +6,10 @@ from torch import nn, Tensor
 from torch.nn import functional as F
 from torchvision.ops import Conv2dNormActivation
 from torchvision.models.detection.image_list import ImageList
-from torchvision.models.detection.anchor_utils import AnchorGenerator
 from torchvision.models.detection import _utils as det_utils
 
 from ops import boxes as box_ops
-from models.detection.boxcoders import XYXY_XYWH_BoxCoder, XYWHA_XYWHA_BoxCoder
+from models.detection.boxcoders import XYWHA_XYWHA_BoxCoder
 from models.detection.anchor_utils import RotatedAnchorGenerator
 
 # RPN Heads
@@ -46,7 +45,6 @@ class RPNHead(nn.Module):
         bbox_reg = []
         for feature in features:
             t = self.conv(feature)
-            t = F.relu(t)
             logits.append(self.cls_logits(t))
             bbox_reg.append(self.bbox_pred(t))
         return logits, bbox_reg
@@ -147,7 +145,7 @@ class RotatedRegionProposalNetwork(nn.Module):
                 matched_gt_boxes_per_image = torch.zeros(anchors_per_image.shape, dtype=torch.float32, device=device)
                 labels_per_image = torch.zeros((anchors_per_image.shape[0],), dtype=torch.float32, device=device)
             else:
-                match_quality_matrix = self.box_similarity(gt_boxes, anchors_per_image)
+                match_quality_matrix = self.box_similarity(gt_boxes, anchors_per_image, True)
                 matched_idxs = self.proposal_matcher(match_quality_matrix)
                 # get the targets corresponding GT for each proposal
                 # NB: need to clamp the indices because we can have a single
@@ -234,7 +232,7 @@ class RotatedRegionProposalNetwork(nn.Module):
             boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
 
             # non-maximum suppression, independently done per level
-            keep = box_ops.batched_nms_rotated(boxes, scores, lvl, self.nms_thresh)
+            keep = box_ops.batched_nms_rotated(boxes, scores, lvl, self.nms_thresh, True)
           
             # keep only topk scoring predictions
             keep = keep[: self.post_nms_top_n()]

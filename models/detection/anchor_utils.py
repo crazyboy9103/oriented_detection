@@ -147,3 +147,15 @@ class RotatedAnchorGenerator(nn.Module):
             anchors.append(anchors_in_image)
         anchors = [torch.cat(anchors_per_image) for anchors_per_image in anchors]
         return anchors
+    
+if __name__ == "__main__":
+    generator = RotatedAnchorGenerator(
+        sizes = ((128),),
+        aspect_ratios = ((1.0,),),
+        angles = ((0, 90, 225),),
+    )
+    
+    image_list = ImageList(torch.rand(1, 3, 512, 512), [(512, 512)])
+    feature_maps = [torch.rand(1, 256, 64, 64)]
+    anchors = generator(image_list, feature_maps)
+    print(anchors)

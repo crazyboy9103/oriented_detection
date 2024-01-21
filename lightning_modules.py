@@ -127,7 +127,7 @@ class ModelWrapper(LightningModule):
         scheduler = LinearWarmUpMultiStepDecay(
             optimizer, 
             milestones=[first, second], 
-            gamma=1/3, 
+            gamma=0.1, 
             warmup_start_lr=0,
             warmup_iters=warmup_iters,
         )

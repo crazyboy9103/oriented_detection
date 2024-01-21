@@ -66,7 +66,7 @@ class RotatedFasterRCNNRoIHead(nn.Module):
                 )
                 labels_in_image = torch.zeros((proposals_in_image.shape[0],), dtype=torch.int64, device=device)
             else:
-                match_quality_matrix = self.box_similarity(gt_boxes_in_image, proposals_in_image)
+                match_quality_matrix = self.box_similarity(gt_boxes_in_image, proposals_in_image, True)
                 
                 matched_idxs_in_image = self.proposal_matcher(match_quality_matrix)
 
@@ -227,7 +227,7 @@ class RotatedFasterRCNNRoIHead(nn.Module):
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]
              
             # non-maximum suppression, independently done per class
-            keep = box_ops.batched_nms_rotated(boxes, scores, labels, self.box_nms_thresh)
+            keep = box_ops.batched_nms_rotated(boxes, scores, labels, self.box_nms_thresh, False)
             # keep only topk scoring predictions
             keep = keep[: self.detections_per_img]
             boxes, scores, labels = boxes[keep, :], scores[keep], labels[keep]

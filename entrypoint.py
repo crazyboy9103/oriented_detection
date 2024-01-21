@@ -21,14 +21,14 @@ def main(args):
         num_workers=args.num_workers, 
         shuffle=True, 
         pin_memory=True,
-        persistent_workers=True
+        # persistent_workers=True
     )
     test_loader_kwargs = dict(
         batch_size=args.batch_size, 
         num_workers=args.num_workers, 
         shuffle=False, 
         pin_memory=True,
-        persistent_workers=True
+        # persistent_workers=True
     )
 
     if args.dataset == 'dota':
@@ -95,7 +95,7 @@ def main(args):
         rpn_post_nms_top_n_train = 2000,
         rpn_post_nms_top_n_test = 2000,
         rpn_nms_thresh = 0.7,
-        rpn_fg_iou_thresh = 0.7,
+        rpn_fg_iou_thresh = 0.3,
         rpn_bg_iou_thresh = 0.3,
         rpn_batch_size_per_image = 256,
         rpn_positive_fraction = 0.5,
@@ -139,14 +139,14 @@ def main(args):
     
     checkpoint_path = f"./checkpoints/{args.model_type}/{args.backbone_type}/{args.dataset}_{args.image_size}"
     callbacks = [
-        ModelCheckpoint(dirpath=checkpoint_path, save_top_k=2, monitor="valid-mAP", mode="max"),
+        # ModelCheckpoint(dirpath=checkpoint_path, save_top_k=2, monitor="valid-mAP", mode="max"),
         LearningRateMonitor(logging_interval='step')
     ]
 
     trainer = pl.Trainer(
         logger=logger, 
         max_epochs=args.num_epochs,
-        gradient_clip_val=args.gradient_clip_val, 
+        # gradient_clip_val=args.gradient_clip_val, 
         precision=args.precision,
         benchmark=True,
         deterministic=True,
@@ -180,8 +180,8 @@ if __name__ == '__main__':
                         help='Type of model to train (rotated faster r-cnn or oriented r-cnn)')
     parser.add_argument('--backbone_type', type=str, default="mobilenetv3large", 
                         choices=["resnet50", "mobilenetv3large", "resnet18", "efficientnet_b0", "efficientnet_b1", "efficientnet_b2", "efficientnet_b3", "efficientnet_b4", "efficientnet_b5", "efficientnet_b6", "efficientnet_b7"])
-    parser.add_argument('--pretrained', type=str2bool, default=False)
-    parser.add_argument('--pretrained_backbone', type=str2bool, default=True)
+    parser.add_argument('--pretrained', type=str2bool, default=True)
+    parser.add_argument('--pretrained_backbone', type=str2bool, default=False)
     parser.add_argument('--freeze_bn', type=str2bool, default=False)
     parser.add_argument('--trainable_backbone_layers', type=int, default=5, choices=[0, 1, 2, 3, 4, 5, 6]) # 5: one batchnorm layer # max 5 for resnet & efnet, 6 for mv3l
     
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     parser.add_argument('--gradient_clip_val', type=float, default=35.0)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--num_epochs', type=int, default=36)
+    parser.add_argument('--num_epochs', type=int, default=60)
     parser.add_argument('--dataset', type=str, default='mvtec', choices=['mvtec', 'dota', 'detdemo', 'jmc'])
     parser.add_argument('--precision', type=str, default='32', choices=['bf16', 'bf16-mixed', '16', '16-mixed', '32', '32-true', '64', '64-true'])
     parser.add_argument('--min_size', type=int, default=360)

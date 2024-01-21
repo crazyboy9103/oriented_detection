@@ -108,7 +108,7 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float,
 
 @torch.jit.script_if_tracing
 def batched_nms_rotated(
-    boxes: torch.Tensor, scores: torch.Tensor, idxs: torch.Tensor, iou_threshold: float
+    boxes: torch.Tensor, scores: torch.Tensor, idxs: torch.Tensor, iou_threshold: float, angle_aware: bool = True
 ):
     """
     Performs non-maximum suppression in a batched fashion.
@@ -156,5 +156,5 @@ def batched_nms_rotated(
     offsets = idxs.to(boxes) * (max_coordinate - min_coordinate + 1)
     boxes_for_nms = boxes.clone()  # avoid modifying the original values in boxes
     boxes_for_nms[:, :2] += offsets[:, None]
-    keep = nms_rotated(boxes_for_nms, scores, iou_threshold)
+    keep = nms_rotated(boxes_for_nms, scores, iou_threshold, angle_aware)
     return keep
