@@ -35,7 +35,8 @@ def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, angle_aware: bool = True) ->
     """ Rotated box IoU. mode_flag and aligned are kept for compatibility with mmrotate implementation.
     Args:
         boxes1, boxes2 (Tensor[N, 5]): boxes in ``(cx, cy, w, h, a)`` format
-        angle_aware
+        angle_aware: arIoU introduced in https://arxiv.org/pdf/1711.09405.pdf
+        angle_threshold: if angle_aware=True, arIoU = 0 for |box1_a - box2_a| > angle_threshold else ignored
     Returns:
         Tensor[N, N]: the NxN matrix containing the pairwise IoU values for every element in boxes1 and boxes2
     """

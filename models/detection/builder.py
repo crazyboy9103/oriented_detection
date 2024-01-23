@@ -4,6 +4,7 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+import torchvision
 from torchvision.ops import misc as misc_nn_ops
 from torchvision.ops.feature_pyramid_network import ExtraFPNBlock, LastLevelMaxPool
 from torchvision.models.detection.faster_rcnn import TwoMLPHead, FastRCNNConvFCHead
@@ -262,7 +263,7 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         
         if box_head is None:
             resolution = box_roi_pool.output_size[0]
-            box_head = TwoMLPHead(in_channels=out_channels * resolution ** 2, representation_size=1024)
+            box_head = TwoMLPHead(in_channels=out_channels * resolution * resolution, representation_size=1024)
         
         if box_predictor is None:
             box_predictor = OrientedRCNNPredictor(in_channels=1024, num_classes=num_classes)
@@ -397,12 +398,7 @@ def model_builder(
         backbone = _mobilenet_extractor(backbone, fpn=True, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)	
 
     elif "efficientnet" in backbone_type:
-        try:
-            backbone = globals().get(backbone_type)(weights=weights_backbone, progress=progress)
-        
-        except:
-            raise ValueError(f"Unknown EfficientNet type {backbone_type}")
-        
+        backbone = torchvision.models.__dict__[backbone_type](weights=weights_backbone, progress=progress)
         backbone = _efficientnet_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
     
     # Anchors
@@ -410,9 +406,9 @@ def model_builder(
     anchor_sizes = (
         (8, 16, 32, 64, 128, )
     ) * num_feature_maps
-    aspect_ratios = ((0.1, 0.5, 1.0, 2.0),) * num_feature_maps
+    aspect_ratios = ((0.1, 0.5, 1.0, 2.0,),) * num_feature_maps
     angles = ((0, 60, 120, 180, 240, 300),) * num_feature_maps
-    
+    # 90, 180, 270,
     rpn_anchor_generator = RotatedAnchorGenerator(anchor_sizes, aspect_ratios, angles) 
     
     pool_size = 7

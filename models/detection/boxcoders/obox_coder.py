@@ -11,8 +11,7 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     reference boxes
     
     ! IMPORTANT !
-    Rest box coders use (x1, y1, x2, y2) format for bboxes, but this one uses (cx, cy, w, h, a).
-    This is due to the fact that Oriented RPN outputs rotated proposals, unlike the standard RPN used in Faster R-CNN.
+    This coder uses (cx, cy, w, h, a).
 
     Args:
         gt_bboxes (Tensor[-1, 5]): rotated reference boxes ``(cx, cy, w, h, a)``
@@ -39,12 +38,10 @@ def encode_oboxes(gt_bboxes: Tensor, bboxes: Tensor, weights: Tensor) -> Tensor:
     targets_dh = wh * torch.log(gt_heights / ex_heights)
     
     targets_da = gt_angles - ex_angles 
-    targets_da = torch.where(torch.abs(targets_da) >= 180.0, targets_da + 2 * torch.sign(ex_angles) * 180.0, targets_da)
-
-    # targets_da = torch.remainder(targets_da, 360.0) # (targets_da + 180.0) % 360.0 - 180.0 # make it in range [-180, 180)
-    # negative = targets_da < 0
-    # targets_da = torch.where(negative, targets_da + 360.0, targets_da)
-    targets_da = targets_da / 360.0 * wa # normalize to [-1, 1]
+    # make sure the target is shortest angular difference, respecting the angular boundaries
+    targets_da = torch.where(torch.abs(targets_da) >= 180.0, targets_da - torch.sign(targets_da) * 360.0, targets_da)
+    # normalize to [-1, 1] before applying wa
+    targets_da = targets_da / 180.0 * wa 
     
     targets_dx = targets_dx.unsqueeze(1)
     targets_dy = targets_dy.unsqueeze(1)
@@ -62,7 +59,7 @@ def decode_oboxes(pred_bboxes: Tensor, bboxes: Tensor, weights: Tensor, bbox_xfo
     dy = pred_bboxes[:, 1::5] / wy
     dw = pred_bboxes[:, 2::5] / ww
     dh = pred_bboxes[:, 3::5] / wh
-    da = pred_bboxes[:, 4::5] / wa * 360.0
+    da = pred_bboxes[:, 4::5] / wa * 180.0
     # Prevent sending too large values into torch.exp()
     dw = torch.clamp(dw, max=bbox_xform_clip)
     dh = torch.clamp(dh, max=bbox_xform_clip)

@@ -390,8 +390,12 @@ single_box_iou_rotated(T const* const box1_raw, T const* const box2_raw, bool an
     // M_PI / 180. == 0.01745329251
     T box1_a_rad = box1.a * 0.01745329251;
     T box2_a_rad = box2.a * 0.01745329251;
-
-    iou *= max(0.0, cos(box1_a_rad - box2_a_rad));
+    T scale = cos(box1_a_rad - box2_a_rad);
+    if (scale > 0.0) {
+      iou *= scale;
+    } else {
+      iou = 0.0;
+    }
   }
   return iou;
 }
