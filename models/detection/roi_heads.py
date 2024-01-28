@@ -275,7 +275,7 @@ class RotatedFasterRCNNRoIHead(nn.Module):
         
             class_logits, obox_regression = self.logits_and_regression(features, train_proposals, image_shapes)
             
-            loss_classifier, loss_obox_reg = rotated_faster_rcnn_loss(
+            loss_classifier, loss_obox_coord_reg, loss_obox_angle_reg = rotated_faster_rcnn_loss(
                 class_logits, obox_regression, train_labels, rotated_regression_targets
             )
         else:
@@ -293,7 +293,8 @@ class RotatedFasterRCNNRoIHead(nn.Module):
             
         losses = {
             "loss_classifier": loss_classifier if self.training else torch.tensor(0.0), 
-            "loss_obox_reg": loss_obox_reg if self.training else torch.tensor(0.0)
+            "loss_obox_coord_reg": loss_obox_coord_reg if self.training else torch.tensor(0.0),
+            "loss_obox_angle_reg": loss_obox_angle_reg if self.training else torch.tensor(0.0)
         }
 
         return result, losses

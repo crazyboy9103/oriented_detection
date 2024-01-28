@@ -19,11 +19,9 @@ This project is designed for object detection in aerial images and specializes i
 - Docker (Recommended)
 - Python 3.10
 - Pip
-    - torch 2.0.1
-    - torchvision 0.15.2
-    - pytorch-lightning 2.0.6
-- NVIDIA GPU (Recommended)
-    - CUDA 11.7
+    - see requirements.txt
+- NVIDIA GPU
+    - CUDA 11.8
     - cuDNN 8.5.0
 
 ## Setup with Docker (Recommended)
@@ -38,7 +36,6 @@ Replace `<DOCKER_IMAGE_TAG>` with your desired Docker image tag.
 ```
 docker run -it -e WANDB_API_KEY="<WANDB_API_KEY>" --gpus all -v <HOST_DATASET_PATH>:/datasets --shm-size=8G --name <CONTAINER_NAME> <DOCKER_IMAGE_TAG>
 ```
-Replace `<WANDB_API_KEY>`, `<HOST_DATASET_PATH>`, and `<CONTAINER_NAME>` with appropriate values.
 
 ## Setup with Pip
 
@@ -101,44 +98,10 @@ from detectron2._C import (
 2. Note: The test set of DOTA does not have annotations, so we use the validation set as the test set.
 
 ## Run Training
-Run the training script with the following command:
-```
-python entrypoint.py \
-    --model_type rotated | oriented \ # rotated faster r-cnn | oriented r-cnn
-    --wandb \ # use wandb for logging
-    --gradient_clip_val 35 \ # gradient clipping
-    --batch_size 8 \
-    --num_workers 8 \
-    --num_epochs 12 \
-    --dataset mvtec | dota \ 
-    --image_size 256 | 512 | 800 \
-    --pretrained True | False \ 
-    --pretrained_backbone True | False \ 
-    --freeze_bn True | False \ 
-    --skip_flip True | False \ 
-    --skip_image_transform True | False \ 
-    --trainable_backbone_layers 1|2|3|4|5 \ 
-    --learning_rate 0.0001
-```
-
-| Flag                          | Description                                                  | Options                 |
-|-------------------------------|--------------------------------------------------------------|-------------------------|
-| `--model_type`                | Choose between rotated or oriented model type                | `rotated`, `oriented`   |
-| `--wandb`                     | Use Weights and Biases for logging                           |                         |
-| `--batch_size`                | Set the batch size for training                              | Numerical values > 0    |
-| `--num_epochs`                | Set the number of training epochs                            | Numerical values > 0    |
-| `--dataset`                   | Choose between mvtec or dota dataset                         | `mvtec`, `dota`         |  
-| `--image_size`                | Set the image size for training                              | `256`, `512`, `800`     |
-| `--pretrained`                | Use COCO pretrained backbone + FPN                           | `True`, `False`         |
-| `--pretrained_backbone`       | Use ImageNet pretrained backbone  (overridden by pretrained) | `True`, `False`         |
-| `--freeze_bn`                 | Freeze batch normalization layers                            | `True`, `False`         |
-| `--skip_flip`                 | Skip random horizontal flipping                              | `True`, `False`         |
-| `--skip_image_transform`      | Skip random image transformation                             | `True`, `False`         |
-| `--trainable_backbone_layers` | Set the number of trainable backbone layers                  | `1`, `2`, `3`, `4`, `5` |
-| `--learning_rate`             | Set the learning rate for training                           | Numerical values > 0    |
+See entrypoint.py for arguments
 
 ## Licenses
-This project integrates code from the following two different projects:
+This project adaptes code from the following two different projects:
 
 1. torchvision is licensed under the BSD 3-Clause License. [Link to full license](https://github.com/pytorch/vision/blob/main/LICENSE)
 2. detectron2 is licensed under the Apache License 2.0. [Link to full license](https://github.com/facebookresearch/detectron2/blob/main/LICENSE)

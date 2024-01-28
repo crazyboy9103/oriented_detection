@@ -1,4 +1,3 @@
-import os
 from typing import Dict, Any, Iterable, Tuple, Optional, Type
 
 import torch

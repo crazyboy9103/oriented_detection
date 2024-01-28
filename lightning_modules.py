@@ -71,7 +71,6 @@ class ModelWrapper(LightningModule):
         for k, v in loss_dict.items():
             self.log(f'train-{k}', v.item())
         self.log('train-loss', loss.item())
-        print("loss", loss.item())
         return loss
 
     def on_train_epoch_end(self):

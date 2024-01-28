@@ -4,10 +4,8 @@ from torch import Tensor
 from ops._box_convert import (
     poly2hbb_np,
     poly2obb_np,
-    poly2obb,
     obb2poly_np,
     obb2poly,
-    hbb2obb,
 )
 from detectron2._C import (
     nms_rotated as _C_nms_rotated,
@@ -31,20 +29,20 @@ def remove_small_rotated_boxes(oboxes: Tensor, min_size: float) -> Tensor:
     keep = torch.where(keep)[0]
     return keep
 
-def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, angle_aware: bool = True) -> Tensor:
+def box_iou_rotated(boxes1: Tensor, boxes2: Tensor, angle_aware: bool = False) -> Tensor:
     """ Rotated box IoU. mode_flag and aligned are kept for compatibility with mmrotate implementation.
     Args:
         boxes1, boxes2 (Tensor[N, 5]): boxes in ``(cx, cy, w, h, a)`` format
         angle_aware: arIoU introduced in https://arxiv.org/pdf/1711.09405.pdf
-        angle_threshold: if angle_aware=True, arIoU = 0 for |box1_a - box2_a| > angle_threshold else ignored
+                     if angle_aware=True, IoU *= max(0, cos(box1_a - box2_a)), 
+                     i.e. modulates IoU by a factor <= 1 and suppresses IoU when angle difference is within (90, 270)
     Returns:
         Tensor[N, N]: the NxN matrix containing the pairwise IoU values for every element in boxes1 and boxes2
     """
     return _C_box_iou_rotated(boxes1, boxes2, angle_aware)
 
-# Note: this function (nms_rotated) might be moved into
-# torchvision/ops/boxes.py in the future
-def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float, angle_aware: bool = True):
+# Adapted from https://github.com/facebookresearch/detectron2/blob/main/detectron2/layers/nms.py
+def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float, angle_aware: bool):
     """
     Performs non-maximum suppression (NMS) on the rotated boxes according
     to their intersection-over-union (IoU).
@@ -95,11 +93,17 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float,
     In summary, not considering angles in rotated NMS seems to be a good option for now,
     but we should be aware of its implications.
 
+    Added:
+        Above is the original comment from Detectron2. We add an option to make the IoU 
+        angle-aware, i.e. IoU *= max(0, cos(box1_a - box2_a)), such that we consider angle 
+        difference when computing IoU. This allows to adapt to the above mentioned cases.
+
     Args:
         boxes (Tensor[N, 5]): Rotated boxes to perform NMS on. They are expected to be in
            (x_center, y_center, width, height, angle_degrees) format.
         scores (Tensor[N]): Scores for each one of the rotated boxes
         iou_threshold (float): Discards all overlapping rotated boxes with IoU < iou_threshold
+        angle_aware (bool): If True, IoU *= max(0, cos(box1_a - box2_a)), i.e. modulates IoU by a factor <= 1 and suppresses IoU when angle difference is within (90, 270)
 
     Returns:
         keep (Tensor): int64 tensor with the indices of the elements that have been kept
@@ -109,7 +113,7 @@ def nms_rotated(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float,
 
 @torch.jit.script_if_tracing
 def batched_nms_rotated(
-    boxes: torch.Tensor, scores: torch.Tensor, idxs: torch.Tensor, iou_threshold: float, angle_aware: bool = True
+    boxes: torch.Tensor, scores: torch.Tensor, idxs: torch.Tensor, iou_threshold: float, angle_aware: bool = False
 ):
     """
     Performs non-maximum suppression in a batched fashion.
@@ -128,6 +132,8 @@ def batched_nms_rotated(
         iou_threshold (float):
            discards all overlapping boxes
            with IoU < iou_threshold
+        angle_aware (bool): 
+            If True, IoU *= max(0, cos(box1_a - box2_a)), i.e. modulates IoU by a factor <= 1 and suppresses IoU when angle difference is within (90, 270)
 
     Returns:
         Tensor:

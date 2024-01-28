@@ -6,3 +6,4 @@ pytorch-lightning
 scipy
 torchvision
 wandb
+shapely

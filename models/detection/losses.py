@@ -23,7 +23,7 @@ def rotated_faster_rcnn_loss(class_logits, obox_regression, labels, obox_regress
 
     Args:
         class_logits (Tensor) : N x C
-        obox_regression (Tensor) : (N x C x 5)
+        obox_regression (Tensor) : (N x C x 6)
         labels (list[Tensor])
         obox_regression_targets (Tensor)
         
@@ -42,16 +42,28 @@ def rotated_faster_rcnn_loss(class_logits, obox_regression, labels, obox_regress
     labels_pos = labels[pos_inds]
     
     obox_regression_targets = torch.cat(obox_regression_targets, dim=0)
-    obox_regression = obox_regression.reshape(N, obox_regression.size(-1) // 5, 5) # N x C x 5
+    obox_regression = obox_regression.reshape(N, obox_regression.size(-1) // 6, 6) # N x C x 5
     
     preds = obox_regression[pos_inds, labels_pos]
     targets = obox_regression_targets[pos_inds]
     
+    preds_coords = preds[:, :4]
+    preds_angles = preds[:, 4:]
+
+    targets_coords = targets[:, :4]
+    targets_angles = targets[:, 4:]
+
     obox_loss = F.smooth_l1_loss(
-        preds, 
-        targets,
+        preds_coords, 
+        targets_coords,
         beta=1.0 / 9,
         reduction="sum",
-    )
-    obox_loss = obox_loss / labels.numel()
-    return classification_loss, obox_loss
+    ) / labels.numel()
+
+    angle_loss = F.smooth_l1_loss(
+        preds_angles, 
+        targets_angles,
+        beta=1.0,
+        reduction="sum",
+    ) / labels.numel()
+    return classification_loss, obox_loss, angle_loss

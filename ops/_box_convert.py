@@ -1,5 +1,3 @@
-# Copyright (c) OpenMMLab. All rights reserved.
-# modified from https://github.com/jbwang1997/BboxToolkit/blob/56b6410d4d7b21f4dfc90afca2bd14ac10cedcd9/BboxToolkit/transforms.py
 import numpy as np
 import torch
 
@@ -18,21 +16,6 @@ def poly2obb_np(polys):
     h = np.sqrt((polys[..., 2] - polys[..., 4])**2 + (polys[..., 3] - polys[..., 5])**2)
     
     obb = np.stack([x, y, w, h, theta], axis=-1)
-    return obb
-
-def poly2obb(polys):
-    # Calculate rotation angle
-    theta = torch.atan2(-(polys[..., 3] - polys[..., 1]),
-                        polys[..., 2] - polys[..., 0])
-    # Center of the bounding box
-    x = polys[..., 0::2].mean(dim=-1)
-    y = polys[..., 1::2].mean(dim=-1)
-    
-    # Calculate oriented width and height
-    w = torch.sqrt((polys[..., 0] - polys[..., 2])**2 + (polys[..., 1] - polys[..., 3])**2)
-    h = torch.sqrt((polys[..., 2] - polys[..., 4])**2 + (polys[..., 3] - polys[..., 5])**2)
-    
-    obb = torch.stack([x, y, w, h, theta], dim=-1)
     return obb
 
 def obb2poly_np(obboxes):
@@ -70,25 +53,3 @@ def poly2hbb_np(polys):
     x2, y2 = polys.max(axis=0)
     hbb = np.array([x1, y1, x2, y2])
     return hbb
-
-def hbb2obb(hbb):
-    """Convert horizontal bounding boxes to oriented bounding boxes.
-
-    Args:
-        hbbs (torch.Tensor): [x_lt,y_lt,x_rb,y_rb]
-
-    Returns:
-        obbs (torch.Tensor): [x_ctr,y_ctr,w,h,angle]
-    """
-    is_list = isinstance(hbb, list)
-    if is_list:
-        hbb = torch.cat(hbb, dim=0)
-        
-    x = (hbb[..., 0] + hbb[..., 2]) * 0.5
-    y = (hbb[..., 1] + hbb[..., 3]) * 0.5
-    w = hbb[..., 2] - hbb[..., 0]
-    h = hbb[..., 3] - hbb[..., 1]
-    theta = torch.full(x.shape, 0.0, dtype=x.dtype, device=x.device)
-    results = torch.stack([x, y, w, h, theta], dim=1)
-    obb = torch.split(results, dim=0) if is_list else results
-    return obb

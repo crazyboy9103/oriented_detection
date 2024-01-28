@@ -3,7 +3,7 @@ import argparse
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, ModelSummary
 
 from configs import TrainConfig, ModelConfig, Kwargs
 from lightning_modules import RotatedFasterRCNN
@@ -95,7 +95,7 @@ def main(args):
         rpn_post_nms_top_n_train = 2000,
         rpn_post_nms_top_n_test = 2000,
         rpn_nms_thresh = 0.7,
-        rpn_fg_iou_thresh = 0.3,
+        rpn_fg_iou_thresh = 0.7,
         rpn_bg_iou_thresh = 0.3,
         rpn_batch_size_per_image = 256,
         rpn_positive_fraction = 0.5,
@@ -140,6 +140,7 @@ def main(args):
     checkpoint_path = f"./checkpoints/{args.model_type}/{args.backbone_type}/{args.dataset}_{args.image_size}"
     callbacks = [
         # ModelCheckpoint(dirpath=checkpoint_path, save_top_k=2, monitor="valid-mAP", mode="max"),
+        ModelSummary(max_depth=-1),
         LearningRateMonitor(logging_interval='step')
     ]
 

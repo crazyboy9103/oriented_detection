@@ -36,14 +36,13 @@ def _resize_oboxes(oboxes: Tensor, original_size: List[int], new_size: List[int]
     # Converting angle from degrees to radians for calculation
     a_rad = torch.deg2rad(a)
     # Adjust the angle based on the change in aspect ratio
-    tan_a = torch.tan(a_rad)
-    tan_a_adjusted = tan_a * (ratio_height / ratio_width)
-    a_adjusted_rad = torch.atan(tan_a_adjusted)
+    sin_a = torch.sin(a_rad)
+    cos_a = torch.cos(a_rad)
+    
+    a_adjusted_rad = torch.atan2(sin_a * ratio_height, cos_a * ratio_width)
     # Converting angle back to degrees
     a_adjusted = torch.rad2deg(a_adjusted_rad)
-    # Adjust angle range to [-180, 180)
-    # a_adjusted = torch.remainder(a_adjusted + 180, 360) - 180
-    a_adjusted = torch.remainder(a_adjusted, 360)
+    a_adjusted = torch.where(a_adjusted < 0, a_adjusted + 360.0, a_adjusted)
 
     cx = cx * ratio_width
     cy = cy * ratio_height
@@ -82,23 +81,24 @@ def _flip_oboxes(oboxes: Tensor, new_size: List[int], direction: Literal['horizo
     
     if direction == 'horizontal':
         flipped[:, 0] = width - oboxes[:, 0] - 1
-        flipped[:, -1] = 180 - flipped[:, -1]
+        # Adjust angle for horizontal flip
+        flipped[:, -1] = (180 - oboxes[:, -1]) % 360
 
     elif direction == 'vertical':
         flipped[:, 1] = height - oboxes[:, 1] - 1
-        flipped[:, -1] = -flipped[:, -1]
+        # Adjust angle for vertical flip
+        flipped[:, -1] = (360 - oboxes[:, -1]) % 360
 
     elif direction == 'diagonal':
         flipped[:, 0] = width - oboxes[:, 0] - 1
         flipped[:, 1] = height - oboxes[:, 1] - 1
-        flipped[:, -1] = -(180 - flipped[:, -1])
+        # Adjust angle for diagonal flip
+        # This combines both horizontal and vertical flips
+        flipped[:, -1] = (180 - flipped[:, -1]) % 360
+        flipped[:, -1] = (360 - flipped[:, -1]) % 360
     else:
         raise ValueError(f'Invalid flipping direction "{direction}"')
     
-    # rotated_flag = (oboxes[:, 4] != np.pi / 2)
-    # flipped[rotated_flag, 4] = np.pi / 2 - oboxes[rotated_flag, 4]
-    # flipped[rotated_flag, 2] = oboxes[rotated_flag, 3]
-    # flipped[rotated_flag, 3] = oboxes[rotated_flag, 2]
     return flipped.reshape(orig_shape)
 
 def _resize_image(

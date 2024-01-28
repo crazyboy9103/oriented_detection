@@ -118,7 +118,9 @@ class RotatedRegionProposalNetwork(nn.Module):
         self.score_thresh = score_thresh
         self.min_size = 1e-3
         
-        self.regression_dim = 5
+        # We would regress 4 coordinates and 2 (sin, cos) angles 
+        self.regression_dim = 6
+        # Then decode 2 angles to 1 angle using atan2
         self.proposal_dim = 5
         
     def pre_nms_top_n(self) -> int:
@@ -295,12 +297,13 @@ class RotatedRegionProposalNetwork(nn.Module):
     def _return_loss(self, anchors, targets, objectness, pred_bbox_deltas):
         labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
         regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
-        loss_objectness, loss_rpn_box_reg = self.compute_loss(
+        loss_objectness, loss_rpn_box_coord_reg, loss_rpn_box_angle_reg = self.compute_loss(
             objectness, pred_bbox_deltas, labels, regression_targets
         )
         losses = {
             "loss_objectness": loss_objectness,
-            "loss_rpn_box_reg": loss_rpn_box_reg,
+            "loss_rpn_box_coord_reg": loss_rpn_box_coord_reg,
+            "loss_rpn_box_angle_reg": loss_rpn_box_angle_reg,
         }
         return losses
     
@@ -330,11 +333,28 @@ class RotatedRegionProposalNetwork(nn.Module):
         objectness_loss = F.binary_cross_entropy_with_logits(objectness[sampled_inds], labels[sampled_inds])
 
         regression_targets = torch.cat(regression_targets, dim=0)
-        box_loss = F.smooth_l1_loss(
-            pred_bbox_deltas[sampled_pos_inds],
-            regression_targets[sampled_pos_inds],
+
+        preds = pred_bbox_deltas[sampled_pos_inds]
+        targets = regression_targets[sampled_pos_inds]
+
+        preds_coords = preds[:, :4]
+        preds_angles = preds[:, 4:]
+
+        targets_coords = targets[:, :4]
+        targets_angles = targets[:, 4:]
+
+        coord_loss = F.smooth_l1_loss(
+            preds_coords,
+            targets_coords,
             beta=1.0 / 9,
             reduction="sum",
         ) / (sampled_inds.numel())
-        
-        return objectness_loss, box_loss
+
+        angle_loss = F.smooth_l1_loss(
+            preds_angles,
+            targets_angles,
+            beta=1.0,
+            reduction="sum",
+        ) / (sampled_inds.numel())
+
+        return objectness_loss, coord_loss, angle_loss

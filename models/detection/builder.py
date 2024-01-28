@@ -129,7 +129,7 @@ class OrientedRCNNPredictor(nn.Module):
     def __init__(self, in_channels, num_classes):
         super().__init__()
         self.cls_score = nn.Linear(in_channels, num_classes)
-        self.obbox_pred = nn.Linear(in_channels, num_classes * 5)
+        self.obbox_pred = nn.Linear(in_channels, num_classes * 6)
 
     def forward(self, x):
         if x.dim() == 4:
@@ -218,7 +218,7 @@ class GeneralizedRCNN(nn.Module):
         
         return detections
 
-class RotatedRCNNWrapper(GeneralizedRCNN):
+class RotatedFasterRCNN(GeneralizedRCNN):
     def __init__(
         self, 
         backbone: nn.Module,                
@@ -230,8 +230,8 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         image_std=None,
         # RPN parameters
         rpn_anchor_generator=None,
-        rpn=None,
-        rpn_head=None,
+        rpn=RotatedRegionProposalNetwork,
+        rpn_head=RPNHead,
         rpn_pre_nms_top_n_train=2000,
         rpn_pre_nms_top_n_test=1000,
         rpn_post_nms_top_n_train=2000,
@@ -243,7 +243,7 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         rpn_positive_fraction=0.5,
         rpn_score_thresh=0.0,
         # Box parameters
-        roi_head=None,
+        roi_head=RotatedFasterRCNNRoIHead,
         box_roi_pool: nn.Module = None,
         box_head: nn.Module = None,
         box_predictor: nn.Module = None,
@@ -258,8 +258,7 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
         **kwargs,
     ) -> None:
         out_channels = backbone.out_channels
-        
-        rpn_head = rpn_head(out_channels, rpn_anchor_generator.num_anchors_per_location()[0])
+        rpn_head = rpn_head(in_channels = out_channels, num_anchors = rpn_anchor_generator.num_anchors_per_location()[0], conv_depth = 1, bbox_dim = 6)
         
         if box_head is None:
             resolution = box_roi_pool.output_size[0]
@@ -275,49 +274,55 @@ class RotatedRCNNWrapper(GeneralizedRCNN):
 
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std, **kwargs)
         
-        rpn_pre_nms_top_n = dict(training=rpn_pre_nms_top_n_train, testing=rpn_pre_nms_top_n_test)
-        rpn_post_nms_top_n = dict(training=rpn_post_nms_top_n_train, testing=rpn_post_nms_top_n_test)
         rpn = rpn(
-            rpn_anchor_generator,
-            rpn_head,
-            rpn_fg_iou_thresh,
-            rpn_bg_iou_thresh,
-            rpn_batch_size_per_image,
-            rpn_positive_fraction,
-            rpn_pre_nms_top_n,
-            rpn_post_nms_top_n,
-            rpn_nms_thresh,
-            score_thresh=rpn_score_thresh,
+            anchor_generator = rpn_anchor_generator, 
+            head = rpn_head,
+            # Faster-RCNN Training
+            fg_iou_thresh = rpn_fg_iou_thresh,
+            bg_iou_thresh = rpn_bg_iou_thresh,
+            batch_size_per_image = rpn_batch_size_per_image,
+            positive_fraction = rpn_positive_fraction,
+            # Faster-RCNN Inference
+            pre_nms_top_n = dict(
+                training=rpn_pre_nms_top_n_train, 
+                testing=rpn_pre_nms_top_n_test
+            ),
+            post_nms_top_n = dict(
+                training=rpn_post_nms_top_n_train, 
+                testing=rpn_post_nms_top_n_test
+            ),
+            nms_thresh = rpn_nms_thresh,
+            score_thresh = rpn_score_thresh
         )
         
         roi_heads = roi_head(
             # Box
-            box_roi_pool,
-            box_head,
-            box_predictor,
-            box_fg_iou_thresh,
-            box_bg_iou_thresh,
-            box_batch_size_per_image,
-            box_positive_fraction,
-            bbox_reg_weights,
-            box_score_thresh,
-            box_nms_thresh,
-            box_detections_per_img,
+            box_roi_pool = box_roi_pool,
+            box_head = box_head,
+            box_predictor = box_predictor,
+            # Rotated Faster R-CNN training
+            fg_iou_thresh = box_fg_iou_thresh,
+            bg_iou_thresh = box_bg_iou_thresh,
+            batch_size_per_image = box_batch_size_per_image,
+            positive_fraction = box_positive_fraction,
+            bbox_reg_weights = bbox_reg_weights,
+            # Faster R-CNN inference
+            score_thresh = box_score_thresh,
+            box_nms_thresh = box_nms_thresh,
+            detections_per_img = box_detections_per_img,
         )
                 
-        super(RotatedRCNNWrapper, self).__init__(backbone, transform, rpn, roi_heads)
+        super(RotatedFasterRCNN, self).__init__(backbone, transform, rpn, roi_heads)
 
-def model_builder(
+def rotated_faster_rcnn_builder(
     *,
     pretrained,
     pretrained_backbone,
     progress: bool = True, 
     num_classes,
     trainable_backbone_layers,
-    model,
     freeze_bn,
     backbone_type,
-    roi_pooler,
     **kwargs
 ):
     weights = None
@@ -385,12 +390,8 @@ def model_builder(
     trainable_backbone_layers = _validate_trainable_layers(is_backbone_trained, trainable_backbone_layers, max_value=max_trainable_backbone_layers, default_value=5)
 
     # Backbone
-    if backbone_type == "resnet50":
-        backbone = resnet50(weights=weights_backbone, progress=progress)
-        backbone = _resnet_fpn_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
-    
-    elif backbone_type == "resnet18":
-        backbone = resnet18(weights=weights_backbone, progress=progress)
+    if "resnet" in backbone_type:
+        backbone = torchvision.models.__dict__[backbone_type](pretrained=pretrained_backbone, progress=progress)
         backbone = _resnet_fpn_extractor(backbone, trainable_layers=trainable_backbone_layers, returned_layers=[1, 2, 3, 4], norm_layer=backbone_norm_layer)
         
     elif backbone_type == "mobilenetv3large":
@@ -406,8 +407,8 @@ def model_builder(
     anchor_sizes = (
         (8, 16, 32, 64, 128, )
     ) * num_feature_maps
-    aspect_ratios = ((0.1, 0.5, 1.0, 2.0,),) * num_feature_maps
-    angles = ((0, 60, 120, 180, 240, 300),) * num_feature_maps
+    aspect_ratios = ((0.1, 0.5, 1.0, 2.0, 10.0),) * num_feature_maps
+    angles = ((0, 45, 90, 135, 180, 225, 270, 315),) * num_feature_maps
     # 90, 180, 270,
     rpn_anchor_generator = RotatedAnchorGenerator(anchor_sizes, aspect_ratios, angles) 
     
@@ -419,9 +420,9 @@ def model_builder(
     )
     
     # Roi pooler
-    box_roi_pool = roi_pooler(featmap_names=["0", "1", "2", "3"], output_size=pool_size, sampling_ratio=2)
+    box_roi_pool = MultiScaleRotatedRoIAlign(featmap_names=["0", "1", "2", "3"], output_size=pool_size, sampling_ratio=2)
     
-    model = model(
+    model = RotatedFasterRCNN(
         backbone,
         num_classes=num_classes,
         rpn_anchor_generator=rpn_anchor_generator,
@@ -446,14 +447,3 @@ def model_builder(
         model.load_state_dict(model_state_dict, strict=False)
         
     return model
-
-RotatedRPNHead = partial(RPNHead, bbox_dim=5)
-
-RotatedFasterRCNN = partial(RotatedRCNNWrapper, 
-                            rpn_head=RotatedRPNHead,
-                            rpn=RotatedRegionProposalNetwork, 
-                            roi_head=RotatedFasterRCNNRoIHead)
-
-rotated_faster_rcnn_builder = partial(model_builder, 
-                              model=RotatedFasterRCNN, 
-                              roi_pooler=MultiScaleRotatedRoIAlign)

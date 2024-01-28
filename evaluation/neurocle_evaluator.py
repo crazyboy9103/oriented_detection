@@ -103,8 +103,6 @@ class DetectionEvaluator:
             mAP = threshold_metrics[3].item()
             mIoU = threshold_metrics[4].item()
             SoAP = threshold_metrics[5].item()
-            # mModIoU = threshold_metrics[5].item()
-            # dtheta = mModIoU / mIoU if mIoU != 0 else 0
             
             detailed_metrics[iou_threshold] = {
                 "Precision": precision,
@@ -131,8 +129,6 @@ class DetectionEvaluator:
         agg_mAP = aggregate_metrics[3].item()
         agg_mIoU = aggregate_metrics[4].item()
         agg_SoAP = aggregate_metrics[5].item()
-        # agg_mModIoU = aggregate_metrics[5].item()
-        # agg_dtheta = agg_mModIoU / agg_mIoU if agg_mIoU != 0 else 0
         aggregate_metrics = {
             "Precision": agg_precision,
             "Recall": agg_recall,
@@ -236,12 +232,10 @@ class DetectionEvaluator:
         mean_iou = dt_ious.mean().item()
         
         abs_diff_angle = torch.abs(gt_angles - dt_angles)
-        # Score of angular precision (SoAP)
+        # Score of angular precision (SoAP) 
+        # We rather use the mean 
         soap = torch.min(abs_diff_angle, 360 - abs_diff_angle).mean().item()
-        # 𝑑(𝐼𝑜𝑈,𝜃_𝑔𝑡, 𝜃_𝑑𝑡)=𝐼𝑜𝑈/(1+ln(|𝜃_𝑔𝑡−𝜃_𝑑𝑡|+1))
-        # modulated_ious = dt_ious / (1 + torch.log(abs_diff_angle + 1))
-        # mean_modulated_iou = modulated_ious.mean().item()
-        return precision, recall, f1_score, AP, mean_iou, soap # mean_modulated_iou
+        return precision, recall, f1_score, AP, mean_iou, soap
 
 # Taken from roaster
 class NeurocleDetectionEvaluator:
