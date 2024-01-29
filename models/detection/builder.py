@@ -407,9 +407,9 @@ def rotated_faster_rcnn_builder(
     anchor_sizes = (
         (8, 16, 32, 64, 128, )
     ) * num_feature_maps
-    aspect_ratios = ((0.1, 0.5, 1.0, 2.0, 10.0),) * num_feature_maps
-    angles = ((0, 45, 90, 135, 180, 225, 270, 315),) * num_feature_maps
-    # 90, 180, 270,
+    aspect_ratios = ((0.5, 1.0, 2.0),) * num_feature_maps
+    angles = ((0, 60, 120, 180, 240, 300),) * num_feature_maps
+
     rpn_anchor_generator = RotatedAnchorGenerator(anchor_sizes, aspect_ratios, angles) 
     
     pool_size = 7
