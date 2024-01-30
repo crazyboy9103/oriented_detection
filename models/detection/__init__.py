@@ -1,1 +1,1 @@
-from .rotated_faster_rcnn import *
+from .builder import *

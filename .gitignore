@@ -1,0 +1,28 @@
+# logs
+wandb/
+lightning_logs/
+
+# compile
+build/
+detectron2.egg-info/ 
+__pycache__/
+# local
+.vscode/
+.ipynb_checkpoints/
+.python-version
+# misc
+notebooks/
+checkpoints/
+rotated-*/
+
+*.pt
+*.pth
+*.ckpt
+
+*.yaml
+*.csv
+*.json
+*.log
+*.txt
+!LICENSE*
+!requirements.txt
