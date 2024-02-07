@@ -1,4 +1,5 @@
 from typing import Dict, Any, Iterable, Tuple, Optional, Type
+import sys
 
 import torch
 from torchvision.transforms.functional import to_pil_image
@@ -7,7 +8,7 @@ from PIL import ImageDraw, ImageFont
 from datasets.base import BaseDataset
 from ops import boxes as box_ops
 
-FONT_PATH = "./fonts/roboto_medium.ttf"
+FONT_PATH = "/workspace/fonts/roboto_medium.ttf"
 FONT_SIZE = 12
 FONT = ImageFont.truetype(FONT_PATH, size=FONT_SIZE)
 ANCHOR_TYPE = 'lt'

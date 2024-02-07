@@ -66,4 +66,6 @@ def rotated_faster_rcnn_loss(class_logits, obox_regression, labels, obox_regress
         beta=1.0,
         reduction="sum",
     ) / labels.numel()
+    # angle_loss = 1-F.cosine_similarity(preds_angles, targets_angles, dim=1)
+    # angle_loss = angle_loss.sum() / (labels.numel())
     return classification_loss, obox_loss, angle_loss

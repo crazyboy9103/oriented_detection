@@ -350,6 +350,8 @@ class RotatedRegionProposalNetwork(nn.Module):
             reduction="sum",
         ) / (sampled_inds.numel())
 
+        # angle_loss = 1-F.cosine_similarity(preds_angles, targets_angles, dim=1)
+        # angle_loss = angle_loss.sum() / (sampled_inds.numel())
         angle_loss = F.smooth_l1_loss(
             preds_angles,
             targets_angles,
